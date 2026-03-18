@@ -89,14 +89,14 @@ export default function AdminSetup() {
           style={{
             position: "absolute",
             inset: 0,
-            backgroundImage: `url('${import.meta.env.BASE_URL}images/dark-apparel-bg.png')`,
+            backgroundImage: `url('${import.meta.env.BASE_URL}images/clothing-store.jpg')`,
             backgroundSize: "cover",
             backgroundPosition: "center",
-            opacity: 0.35,
+            opacity: 0.4,
           }}
         />
         {/* Dark overlay to ensure readability */}
-        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)" }} />
         {/* Logo area - centered vertically in upper portion */}
         <div className="flex-1 flex flex-col items-center justify-center" style={{ position: "relative", zIndex: 1 }}>
           <img
@@ -167,8 +167,9 @@ export default function AdminSetup() {
                 style={{
                   width: "100%",
                   borderCollapse: "collapse",
-                  border: "2px solid #111",
+                  border: "2px solid #fff",
                   fontSize: "0.88rem",
+                  background: "#000",
                 }}
               >
                 <tbody>
@@ -177,7 +178,7 @@ export default function AdminSetup() {
                   </TableRow>
 
                   <TableRow label="Organisational ID">
-                    <span style={{ color: "#aaa", fontStyle: "italic", padding: "0 0.5rem" }}>Auto generated</span>
+                    <span style={{ color: "#888", fontStyle: "normal", padding: "0 0.6rem" }}>Auto generated</span>
                   </TableRow>
 
                   <TableRow label="Administrator's Forename(s)" error={errors.administratorForenames?.message}>
@@ -262,32 +263,32 @@ function TableRow({
     <tr>
       <td
         style={{
-          border: "1px solid #111",
-          padding: "0.55rem 0.75rem",
+          border: "1px solid #fff",
+          padding: "0.6rem 0.75rem",
           width: "46%",
           fontWeight: isHeader ? 700 : 400,
           verticalAlign: "middle",
-          background: "#fff",
-          color: "#111",
-          lineHeight: 1.35,
+          background: "#000",
+          color: "#fff",
+          lineHeight: 1.4,
         }}
       >
         {label}
         {error && (
-          <div style={{ color: "#c00", fontSize: "0.72rem", marginTop: 2, fontWeight: 400 }}>
+          <div style={{ color: "#f87171", fontSize: "0.7rem", marginTop: 2, fontWeight: 400 }}>
             {error}
           </div>
         )}
       </td>
       <td
         style={{
-          border: "1px solid #111",
+          border: "1px solid #fff",
           padding: 0,
-          background: "#111",
+          background: "#000",
           verticalAlign: "middle",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", minHeight: 36, padding: "0.25rem 0" }}>
+        <div style={{ display: "flex", alignItems: "center", minHeight: 38, padding: "0.2rem 0" }}>
           {children}
         </div>
       </td>
