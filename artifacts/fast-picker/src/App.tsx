@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import AdminSetup from "@/pages/admin-setup";
 import SetupSuccess from "@/pages/setup-success";
+import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import NotFound from "@/pages/not-found";
 
@@ -23,7 +24,7 @@ function Router() {
       <Route path="/" component={AdminSetup} />
       <Route path="/setup" component={AdminSetup} />
       <Route path="/setup-success" component={SetupSuccess} />
-      <Route path="/login" component={Dashboard} />
+      <Route path="/login" component={Login} />
       <Route path="/dashboard" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>

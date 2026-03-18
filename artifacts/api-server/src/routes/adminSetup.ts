@@ -105,4 +105,45 @@ router.post("/setup", async (req, res) => {
   }
 });
 
+router.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      res.status(400).json({ error: "Username and password are required" });
+      return;
+    }
+
+    const [admin] = await db
+      .select()
+      .from(administratorsTable)
+      .where(eq(administratorsTable.username, username))
+      .limit(1);
+
+    if (!admin) {
+      res.status(401).json({ error: "Invalid username or password" });
+      return;
+    }
+
+    const passwordHash = hashPassword(password);
+    if (admin.passwordHash !== passwordHash) {
+      res.status(401).json({ error: "Invalid username or password" });
+      return;
+    }
+
+    if (!admin.isActive) {
+      res.status(403).json({ error: "Account is inactive" });
+      return;
+    }
+
+    res.json({
+      success: true,
+      username: admin.username,
+      designation: admin.designation,
+      message: "Login successful",
+    });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
