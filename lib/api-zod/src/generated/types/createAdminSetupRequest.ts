@@ -5,14 +5,6 @@
  * API specification for Fast Picker
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-export interface AdminSetupStatus {
-  isSetup: boolean;
-  organisationName?: string | null;
-}
 
 export interface CreateAdminSetupRequest {
   /** @minLength 1 */
@@ -31,16 +23,4 @@ export interface CreateAdminSetupRequest {
   retypePassword: string;
   /** @minLength 1 */
   productCode: string;
-}
-
-export interface AdminSetupResult {
-  organisationalId: string;
-  organisationTradingName: string;
-  username: string;
-  message: string;
-}
-
-export interface ErrorResponse {
-  error: string;
-  details?: string | null;
 }
