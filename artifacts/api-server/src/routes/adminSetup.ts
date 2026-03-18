@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, organisationsTable, administratorsTable } from "@workspace/db";
+import { db, organisationsTable, administratorsTable, usersTable } from "@workspace/db";
 import { CreateAdminSetupBody, GetAdminSetupResponse } from "@workspace/api-zod";
 import { count, eq } from "drizzle-orm";
 import crypto from "crypto";
@@ -113,34 +113,73 @@ router.post("/login", async (req, res) => {
       return;
     }
 
+    const passwordHash = hashPassword(password);
+
+    // Check administrators table first
     const [admin] = await db
       .select()
       .from(administratorsTable)
       .where(eq(administratorsTable.username, username))
       .limit(1);
 
-    if (!admin) {
+    if (admin) {
+      if (admin.passwordHash !== passwordHash) {
+        res.status(401).json({ error: "Invalid username or password" });
+        return;
+      }
+      if (!admin.isActive) {
+        res.status(403).json({ error: "Account is inactive" });
+        return;
+      }
+      res.json({
+        success: true,
+        username: admin.username,
+        forenames: admin.forenames,
+        surname: admin.surname,
+        designation: admin.designation,
+        message: "Login successful",
+      });
+      return;
+    }
+
+    // Check regular users table
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.username, username))
+      .limit(1);
+
+    if (!user) {
       res.status(401).json({ error: "Invalid username or password" });
       return;
     }
 
-    const passwordHash = hashPassword(password);
-    if (admin.passwordHash !== passwordHash) {
+    if (user.passwordHash !== passwordHash) {
       res.status(401).json({ error: "Invalid username or password" });
       return;
     }
 
-    if (!admin.isActive) {
+    if (!user.isActive) {
       res.status(403).json({ error: "Account is inactive" });
+      return;
+    }
+
+    // First-login: prompt password change
+    if (user.isFirstLogin) {
+      res.json({
+        requiresPasswordChange: true,
+        username: user.username,
+        message: "Password change required",
+      });
       return;
     }
 
     res.json({
       success: true,
-      username: admin.username,
-      forenames: admin.forenames,
-      surname: admin.surname,
-      designation: admin.designation,
+      username: user.username,
+      forenames: user.forenames,
+      surname: user.surname,
+      designation: user.rights,
       message: "Login successful",
     });
   } catch {

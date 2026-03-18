@@ -5,21 +5,19 @@ import crypto from "crypto";
 
 const router: IRouter = Router();
 
+const DEFAULT_PASSWORD = "Welcome1";
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password + "fast-picker-salt").digest("hex");
+}
+
 function generateUserId(): string {
   return "USR-" + crypto.randomBytes(4).toString("hex").toUpperCase();
 }
 
 router.post("/", async (req, res) => {
   try {
-    const {
-      username,
-      forenames,
-      surname,
-      employeeNumber,
-      email,
-      rights,
-      branchCode,
-    } = req.body;
+    const { username, forenames, surname, employeeNumber, email, rights, branchCode } = req.body;
 
     if (!username || !forenames || !surname || !rights || !branchCode) {
       res.status(400).json({ error: "Missing required fields" });
@@ -33,6 +31,7 @@ router.post("/", async (req, res) => {
     }
 
     const userId = generateUserId();
+    const passwordHash = hashPassword(DEFAULT_PASSWORD);
 
     const [user] = await db
       .insert(usersTable)
@@ -46,6 +45,8 @@ router.post("/", async (req, res) => {
         email: email || null,
         rights,
         branchCode,
+        passwordHash,
+        isFirstLogin: true,
         isActive: true,
       })
       .returning();
@@ -64,6 +65,7 @@ router.post("/", async (req, res) => {
       rights: user.rights,
       branchCode: user.branchCode,
       isActive: user.isActive,
+      defaultPassword: DEFAULT_PASSWORD,
       message: "Account created successfully",
     });
   } catch (error: unknown) {
@@ -80,6 +82,42 @@ router.get("/", async (_req, res) => {
   try {
     const users = await db.select().from(usersTable);
     res.json(users);
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/set-password", async (req, res) => {
+  try {
+    const { username, newPassword } = req.body;
+
+    if (!username || !newPassword) {
+      res.status(400).json({ error: "Username and new password are required" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "Password must be at least 6 characters" });
+      return;
+    }
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.username, username))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const newHash = hashPassword(newPassword);
+    await db
+      .update(usersTable)
+      .set({ passwordHash: newHash, isFirstLogin: false })
+      .where(eq(usersTable.username, username));
+
+    res.json({ success: true, message: "Password updated successfully" });
   } catch {
     res.status(500).json({ error: "Internal server error" });
   }

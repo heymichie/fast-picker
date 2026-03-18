@@ -14,6 +14,8 @@ export const usersTable = pgTable("users", {
   email: text("email"),
   rights: text("rights").notNull(),
   branchCode: text("branch_code").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  isFirstLogin: boolean("is_first_login").default(true).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

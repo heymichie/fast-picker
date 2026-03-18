@@ -72,8 +72,9 @@ export default function CreateAccount() {
         setApiError(body.error || "Failed to create account");
         return;
       }
-      setSuccessMsg("Account created successfully!");
-      setTimeout(() => setLocation("/dashboard"), 1800);
+      const body = await res.json();
+      setSuccessMsg(`Account created! Default password: ${body.defaultPassword ?? "Welcome1"} — give this to the user.`);
+      setTimeout(() => setLocation("/dashboard"), 4000);
     } catch {
       setApiError("Unable to connect. Please try again.");
     } finally {

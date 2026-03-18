@@ -39,6 +39,10 @@ export default function Login() {
         return;
       }
       const body = await res.json();
+      if (body.requiresPasswordChange) {
+        setLocation(`/new-signin?username=${encodeURIComponent(body.username)}`);
+        return;
+      }
       localStorage.setItem("fp_user", JSON.stringify({
         username: body.username,
         forenames: body.forenames,
