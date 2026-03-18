@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
@@ -22,19 +22,21 @@ function getStoredUser() {
 
 const ALL_RIGHTS = ["Store Manager", "Store Supervisor", "Merchandiser", "Administrator", "Order Picker"] as const;
 const STORE_MANAGER_RIGHTS = ["Store Supervisor", "Merchandiser", "Order Picker"] as const;
-const BRANCH_CODES = ["501", "511", "502"] as const;
+
+function buildUsername(forenames: string, surname: string): string {
+  const first = forenames.trim().split(/\s+/)[0] ?? "";
+  const initial = surname.trim()[0]?.toUpperCase() ?? "";
+  return first && initial ? `${first}${initial}` : "";
+}
 
 export default function CreateAccount() {
   const [, setLocation] = useLocation();
   const [userId] = useState(generateUserId);
-  const [username, setUsername] = useState("");
   const [forenames, setForenames] = useState("");
   const [surname, setSurname] = useState("");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [email, setEmail] = useState("");
   const [rights, setRights] = useState<string>("");
-  const [branchCode, setBranchCode] = useState<string>("");
-  const [otherBranch, setOtherBranch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -42,21 +44,24 @@ export default function CreateAccount() {
   const currentUser = getStoredUser();
   const createdByName = currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "System";
 
+  const username = buildUsername(forenames, surname);
   const isStoreManager = currentUser?.designation === "Store Manager";
   const storeManagerBranch = currentUser?.branchCode ?? null;
   const RIGHTS = isStoreManager ? STORE_MANAGER_RIGHTS : ALL_RIGHTS;
   const isAdminRole = rights === "Administrator";
-  const branchLocked = isAdminRole || isStoreManager;
-  const lockedBranchLabel = isAdminRole ? "ALL" : (storeManagerBranch ?? "—");
-  const effectiveBranch = isAdminRole ? "ALL" : isStoreManager ? (storeManagerBranch ?? "") : (branchCode === "Other" ? otherBranch : branchCode);
+  const effectiveBranch = isAdminRole
+    ? "ALL"
+    : isStoreManager
+    ? (storeManagerBranch ?? "ALL")
+    : "ALL";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setApiError(null);
     setSuccessMsg(null);
 
-    if (!username.trim() || !forenames.trim() || !surname.trim() || !rights || !effectiveBranch) {
-      setApiError("Please fill in all required fields.");
+    if (!username || !forenames.trim() || !surname.trim() || !rights) {
+      setApiError("Please fill in all required fields including Fore Name(s), Surname, and Rights.");
       return;
     }
 
@@ -205,17 +210,18 @@ export default function CreateAccount() {
               </td>
             </tr>
 
-            {/* Username */}
+            {/* Username — auto-generated */}
             <tr>
-              <td style={cellStyle(false)}>Username</td>
               <td style={cellStyle(false)}>
-                <input
-                  style={inputStyle}
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder=""
-                />
+                Username
+                <div style={{ fontSize: "0.72rem", color: "#555", marginTop: 3, fontStyle: "italic" }}>
+                  Auto-generated from name
+                </div>
+              </td>
+              <td style={cellStyle(false)}>
+                <span style={{ fontWeight: 600, color: username ? "#111" : "#999", fontSize: "0.95rem" }}>
+                  {username || "—"}
+                </span>
               </td>
             </tr>
 
@@ -287,11 +293,7 @@ export default function CreateAccount() {
                         name="rights"
                         value={r}
                         checked={rights === r}
-                        onChange={() => {
-                          setRights(r);
-                          if (r === "Administrator") setBranchCode("ALL");
-                          else if (branchCode === "ALL") setBranchCode("");
-                        }}
+                        onChange={() => setRights(r)}
                         style={{ accentColor: "#333", width: 15, height: 15 }}
                       />
                       {r}
@@ -301,68 +303,6 @@ export default function CreateAccount() {
               </td>
             </tr>
 
-            {/* Store Branch Code */}
-            <tr style={{ opacity: branchLocked ? 0.38 : 1, transition: "opacity 0.2s" }}>
-              <td style={cellStyle(false)}>
-                Store Branch Code
-                {isAdminRole && (
-                  <div style={{ fontSize: "0.72rem", color: "#555", marginTop: 3, fontStyle: "italic" }}>
-                    N/A — Administrators access all branches
-                  </div>
-                )}
-                {isStoreManager && (
-                  <div style={{ fontSize: "0.72rem", color: "#555", marginTop: 3, fontStyle: "italic" }}>
-                    Assigned to your branch
-                  </div>
-                )}
-              </td>
-              <td style={cellStyle(false)}>
-                {branchLocked ? (
-                  <span style={{ fontWeight: 600, color: "#444", fontSize: "0.95rem" }}>{lockedBranchLabel}</span>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {BRANCH_CODES.map((code) => (
-                      <label key={code} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#111" }}>
-                        <input
-                          type="radio"
-                          name="branchCode"
-                          value={code}
-                          checked={branchCode === code}
-                          onChange={() => setBranchCode(code)}
-                          style={{ accentColor: "#333", width: 15, height: 15 }}
-                        />
-                        {code}
-                      </label>
-                    ))}
-                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#111" }}>
-                      <input
-                        type="radio"
-                        name="branchCode"
-                        value="Other"
-                        checked={branchCode === "Other"}
-                        onChange={() => setBranchCode("Other")}
-                        style={{ accentColor: "#333", width: 15, height: 15 }}
-                      />
-                      Other
-                      {branchCode === "Other" && (
-                        <input
-                          type="text"
-                          value={otherBranch}
-                          onChange={(e) => setOtherBranch(e.target.value)}
-                          placeholder="Enter code..."
-                          style={{
-                            ...inputStyle,
-                            width: 140,
-                            borderBottom: "1.5px solid #555",
-                            marginLeft: 4,
-                          }}
-                        />
-                      )}
-                    </label>
-                  </div>
-                )}
-              </td>
-            </tr>
           </tbody>
         </table>
 
