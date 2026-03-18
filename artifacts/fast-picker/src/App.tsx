@@ -11,6 +11,7 @@ import CreateAccount from "@/pages/create-account";
 import NewSignIn from "@/pages/new-signin";
 import UserSetupSuccess from "@/pages/user-setup-success";
 import UserRights from "@/pages/user-rights";
+import ManageAccounts from "@/pages/manage-accounts";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/new-signin" component={NewSignIn} />
       <Route path="/user-setup-success" component={UserSetupSuccess} />
       <Route path="/user-rights" component={UserRights} />
+      <Route path="/manage-accounts" component={ManageAccounts} />
       <Route component={NotFound} />
     </Switch>
   );

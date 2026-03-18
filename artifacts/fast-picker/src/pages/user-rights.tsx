@@ -129,7 +129,7 @@ export default function UserRights() {
           style={{ height: 56, objectFit: "contain", flexShrink: 0 }}
         />
         <h1 style={{ fontSize: "2.2rem", fontWeight: 700, color: "#fff", margin: 0, flex: 1, lineHeight: 1 }}>
-          Account: ({user?.username || "username"})
+          Account: {user ? `${user.forenames} ${user.surname}` : "(username)"}
         </h1>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
           <button

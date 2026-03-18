@@ -39,6 +39,7 @@ export default function CreateAccount() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const currentUser = getStoredUser();
+  const createdByName = currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "System";
 
   const effectiveBranch = branchCode === "Other" ? otherBranch : branchCode;
 
@@ -65,6 +66,7 @@ export default function CreateAccount() {
           email: email.trim() || null,
           rights,
           branchCode: effectiveBranch,
+          createdBy: createdByName,
         }),
       });
       if (!res.ok) {

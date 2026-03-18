@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, organisationsTable } from "@workspace/db";
+import { db, usersTable, organisationsTable, administratorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -17,7 +17,7 @@ function generateUserId(): string {
 
 router.post("/", async (req, res) => {
   try {
-    const { username, forenames, surname, employeeNumber, email, rights, branchCode } = req.body;
+    const { username, forenames, surname, employeeNumber, email, rights, branchCode, createdBy } = req.body;
 
     if (!username || !forenames || !surname || !rights || !branchCode) {
       res.status(400).json({ error: "Missing required fields" });
@@ -47,6 +47,7 @@ router.post("/", async (req, res) => {
         branchCode,
         passwordHash,
         isFirstLogin: true,
+        createdBy: createdBy || null,
         isActive: true,
       })
       .returning();
@@ -82,6 +83,42 @@ router.get("/", async (_req, res) => {
   try {
     const users = await db.select().from(usersTable);
     res.json(users);
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/all", async (_req, res) => {
+  try {
+    const users = await db.select().from(usersTable);
+    const admins = await db.select().from(administratorsTable);
+
+    const combined = [
+      ...admins.map((a) => ({
+        username: a.username,
+        fullName: `${a.forenames} ${a.surname}`,
+        employeeNumber: null as string | null,
+        branchCode: "ALL",
+        rights: a.designation,
+        isActive: a.isActive,
+        createdBy: "System",
+        createdAt: a.createdAt.toISOString(),
+        accountType: "admin" as const,
+      })),
+      ...users.map((u) => ({
+        username: u.username,
+        fullName: `${u.forenames} ${u.surname}`,
+        employeeNumber: u.employeeNumber,
+        branchCode: u.branchCode,
+        rights: u.rights,
+        isActive: u.isActive,
+        createdBy: u.createdBy ?? "System",
+        createdAt: u.createdAt.toISOString(),
+        accountType: "user" as const,
+      })),
+    ];
+
+    res.json(combined);
   } catch {
     res.status(500).json({ error: "Internal server error" });
   }
