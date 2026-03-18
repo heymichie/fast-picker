@@ -47,7 +47,7 @@ const ALL_MENU_ITEMS = [
     icon: LayoutGrid,
     description: "Configure aisles, sections and product locations in store",
     path: "/store-layout",
-    requiredPerms: ["Setup branch layout"],
+    requiredPerms: ["Setup branch layout", "View branch layout"],
   },
   {
     label: "User Rights",

@@ -20,6 +20,7 @@ const PERMISSIONS = [
   "Manage Accounts",
   "Assign Account Rights",
   "Setup branch layout",
+  "View branch layout",
   "Create Order picker accounts",
   "Manage Order Picker Accounts",
   "View Orders",
