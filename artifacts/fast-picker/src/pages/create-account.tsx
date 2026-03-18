@@ -87,7 +87,9 @@ export default function CreateAccount() {
         return;
       }
       const body = await res.json();
-      setSuccessMsg(`Account created! Default password: ${body.defaultPassword ?? "Welcome1"} — give this to the user.`);
+      const assignedUsername = body.username ?? username;
+      const nameNote = assignedUsername !== username ? ` Username assigned as "${assignedUsername}" (already existed).` : "";
+      setSuccessMsg(`Account created for ${assignedUsername}! Default password: ${body.defaultPassword ?? "Welcome1"} — give this to the user.${nameNote}`);
       setTimeout(() => setLocation("/dashboard"), 4000);
     } catch {
       setApiError("Unable to connect. Please try again.");

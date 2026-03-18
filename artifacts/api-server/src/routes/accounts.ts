@@ -15,6 +15,28 @@ function generateUserId(): string {
   return "USR-" + crypto.randomBytes(4).toString("hex").toUpperCase();
 }
 
+async function findUniqueUsername(base: string): Promise<string> {
+  const candidates = [base, ...Array.from({ length: 98 }, (_, i) => `${base}${i + 2}`)];
+  for (const candidate of candidates) {
+    const [existingUser] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.username, candidate))
+      .limit(1);
+    if (existingUser) continue;
+
+    const [existingAdmin] = await db
+      .select({ id: administratorsTable.id })
+      .from(administratorsTable)
+      .where(eq(administratorsTable.username, candidate))
+      .limit(1);
+    if (existingAdmin) continue;
+
+    return candidate;
+  }
+  return `${base}-${Date.now()}`;
+}
+
 router.post("/", async (req, res) => {
   try {
     const { username, forenames, surname, employeeNumber, email, rights, branchCode, createdBy } = req.body;
@@ -30,6 +52,7 @@ router.post("/", async (req, res) => {
       return;
     }
 
+    const resolvedUsername = await findUniqueUsername(username);
     const userId = generateUserId();
     const passwordHash = hashPassword(DEFAULT_PASSWORD);
 
@@ -38,7 +61,7 @@ router.post("/", async (req, res) => {
       .values({
         userId,
         organisationId: org.id,
-        username,
+        username: resolvedUsername,
         forenames,
         surname,
         employeeNumber: employeeNumber || null,
@@ -70,12 +93,8 @@ router.post("/", async (req, res) => {
       message: "Account created successfully",
     });
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    if (msg.includes("unique")) {
-      res.status(400).json({ error: "Username already exists" });
-    } else {
-      res.status(500).json({ error: "Internal server error" });
-    }
+    console.error("Create account error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
