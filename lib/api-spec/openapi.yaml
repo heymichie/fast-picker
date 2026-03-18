@@ -1,0 +1,151 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: API specification for Fast Picker
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: admin
+    description: Administrator setup operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /admin/setup:
+    get:
+      operationId: getAdminSetup
+      tags: [admin]
+      summary: Get admin setup status
+      description: Returns whether admin setup has been completed
+      responses:
+        "200":
+          description: Admin setup status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSetupStatus"
+    post:
+      operationId: createAdminSetup
+      tags: [admin]
+      summary: Create admin setup
+      description: Creates the initial administrator account and organisation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminSetupRequest"
+      responses:
+        "201":
+          description: Admin setup completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSetupResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Admin already set up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AdminSetupStatus:
+      type: object
+      properties:
+        isSetup:
+          type: boolean
+        organisationName:
+          type: string
+          nullable: true
+      required:
+        - isSetup
+    CreateAdminSetupRequest:
+      type: object
+      properties:
+        organisationTradingName:
+          type: string
+          minLength: 1
+        administratorForenames:
+          type: string
+          minLength: 1
+        surname:
+          type: string
+          minLength: 1
+        designation:
+          type: string
+          minLength: 1
+        username:
+          type: string
+          minLength: 3
+        password:
+          type: string
+          minLength: 6
+        retypePassword:
+          type: string
+          minLength: 6
+        productCode:
+          type: string
+          minLength: 1
+      required:
+        - organisationTradingName
+        - administratorForenames
+        - surname
+        - designation
+        - username
+        - password
+        - retypePassword
+        - productCode
+    AdminSetupResult:
+      type: object
+      properties:
+        organisationalId:
+          type: string
+        organisationTradingName:
+          type: string
+        username:
+          type: string
+        message:
+          type: string
+      required:
+        - organisationalId
+        - organisationTradingName
+        - username
+        - message
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+          nullable: true
+      required:
+        - error

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Fast Picker"
+version = "1.0.0"
+id = "artifacts/fast-picker"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 18525
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/fast-picker run dev"
+
+[services.env]
+PORT = "18525"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/fast-picker", "run", "build"]
+publicDir = "artifacts/fast-picker/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

@@ -1,0 +1,15 @@
+packages:
+  "react-hook-form": "Form state management and validation"
+  "@hookform/resolvers": "Zod resolver for react-hook-form"
+  "framer-motion": "Smooth animations for page loads and UI elements"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+
+images:
+  - path: "artifacts/fast-picker/public/images/dark-apparel-bg.png"
+    description: "Extremely dark, moody, abstract texture of fine clothing fabric or warehouse racking in deep charcoal and black. Very low contrast, suitable as a subtle background behind text. Professional, premium retail aesthetic."
+    aspect_ratio: "9:16"
+
+notes:
+  - The API uses TanStack query hooks from @workspace/api-client-react
+  - useCreateAdminSetup requires mutation variables in the shape { data: CreateAdminSetupRequest }
