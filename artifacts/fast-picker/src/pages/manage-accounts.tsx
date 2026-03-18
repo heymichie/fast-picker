@@ -53,6 +53,10 @@ export default function ManageAccounts() {
       .then((data: AccountRow[]) => {
         if (isAdministrator) {
           setAccounts(data);
+        } else if (user?.designation === "Store Manager") {
+          setAccounts(data.filter((a) =>
+            ["Store Supervisor", "Merchandiser", "Order Picker"].includes(a.rights)
+          ));
         } else {
           setAccounts(data.filter((a) => a.rights === "Order Picker"));
         }

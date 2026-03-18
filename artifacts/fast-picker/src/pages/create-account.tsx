@@ -20,7 +20,8 @@ function getStoredUser() {
   }
 }
 
-const RIGHTS = ["Store Manager", "Store Supervisor", "Administrator", "Order Picker"] as const;
+const ALL_RIGHTS = ["Store Manager", "Store Supervisor", "Merchandiser", "Administrator", "Order Picker"] as const;
+const STORE_MANAGER_RIGHTS = ["Store Supervisor", "Merchandiser", "Order Picker"] as const;
 const BRANCH_CODES = ["501", "511", "502"] as const;
 
 export default function CreateAccount() {
@@ -41,6 +42,8 @@ export default function CreateAccount() {
   const currentUser = getStoredUser();
   const createdByName = currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "System";
 
+  const isStoreManager = currentUser?.designation === "Store Manager";
+  const RIGHTS = isStoreManager ? STORE_MANAGER_RIGHTS : ALL_RIGHTS;
   const isAdminRole = rights === "Administrator";
   const effectiveBranch = isAdminRole ? "ALL" : (branchCode === "Other" ? otherBranch : branchCode);
 
