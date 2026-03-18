@@ -1,13 +1,44 @@
 import { useGetAdminSetup } from "@workspace/api-client-react";
-import { Link, useLocation } from "wouter";
-import { LogOut, Package, Users, Settings, Activity, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useLocation } from "wouter";
+import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut } from "lucide-react";
+
+const menuItems = [
+  {
+    label: "Create New Account",
+    icon: UserPlus,
+    description: "Add new pickers, supervisors or admin users to the system",
+    path: "/create-account",
+  },
+  {
+    label: "Manage Accounts",
+    icon: Users,
+    description: "View, edit and deactivate existing user accounts",
+    path: "/manage-accounts",
+  },
+  {
+    label: "Reports",
+    icon: BarChart2,
+    description: "View picking performance, order history and analytics",
+    path: "/reports",
+  },
+  {
+    label: "Setup Store Layout",
+    icon: LayoutGrid,
+    description: "Configure aisles, sections and product locations in store",
+    path: "/store-layout",
+  },
+  {
+    label: "User Rights",
+    icon: ShieldCheck,
+    description: "Manage role permissions and access controls for all users",
+    path: "/user-rights",
+  },
+];
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: setupStatus, isLoading } = useGetAdminSetup();
 
-  // Protect route
   if (!isLoading && setupStatus && !setupStatus.isSetup) {
     setLocation("/setup");
     return null;
@@ -15,73 +46,128 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f4f4" }}>
+        <Loader2 style={{ width: 32, height: 32, animation: "spin 1s linear infinite", color: "#555" }} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] flex flex-col md:flex-row">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-primary text-primary-foreground flex flex-col">
-        <div className="p-6 border-b border-white/10 flex items-center gap-3">
-          <Package className="h-6 w-6" />
-          <span className="font-display font-bold text-lg tracking-wider">FAST PICKER</span>
-        </div>
-        <div className="px-6 py-4 border-b border-white/10">
-          <p className="text-xs text-primary-foreground/60 uppercase tracking-widest font-semibold mb-1">Organization</p>
-          <p className="text-sm font-medium truncate">{setupStatus?.organisationName || "Loading..."}</p>
-        </div>
-        <nav className="flex-1 py-6 flex flex-col gap-2 px-4">
-          <Button variant="ghost" className="justify-start gap-3 w-full bg-white/10 text-white hover:bg-white/20 hover:text-white">
-            <Activity className="h-4 w-4" /> Dashboard
-          </Button>
-          <Button variant="ghost" className="justify-start gap-3 w-full text-primary-foreground/70 hover:bg-white/5 hover:text-white">
-            <Package className="h-4 w-4" /> Orders
-          </Button>
-          <Button variant="ghost" className="justify-start gap-3 w-full text-primary-foreground/70 hover:bg-white/5 hover:text-white">
-            <Users className="h-4 w-4" /> Team
-          </Button>
-          <Button variant="ghost" className="justify-start gap-3 w-full text-primary-foreground/70 hover:bg-white/5 hover:text-white">
-            <Settings className="h-4 w-4" /> Settings
-          </Button>
-        </nav>
-        <div className="p-4 border-t border-white/10">
-          <Button variant="ghost" className="justify-start gap-3 w-full text-primary-foreground/70 hover:bg-white/5 hover:text-white">
-            <LogOut className="h-4 w-4" /> Sign Out
-          </Button>
-        </div>
-      </aside>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f2f2f0" }}>
 
-      {/* Main Content */}
-      <main className="flex-1 p-8">
-        <header className="mb-8">
-          <h1 className="text-3xl text-foreground font-display">Welcome back</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Here's what's happening with your store today.</p>
-        </header>
+      {/* Top header */}
+      <header
+        style={{
+          background: "#111",
+          padding: "0 2.5rem",
+          height: 72,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}
+      >
+        {/* Logo */}
+        <img
+          src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+          alt="Fast Picker"
+          style={{ height: 48, objectFit: "contain" }}
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {[
-            { label: "Pending Orders", value: "24" },
-            { label: "Picked Today", value: "156" },
-            { label: "Active Pickers", value: "8" },
-          ].map((stat, i) => (
-            <div key={i} className="bg-card rounded-xl p-6 shadow-sm border border-border/50">
-              <h3 className="text-sm font-medium text-muted-foreground">{stat.label}</h3>
-              <p className="text-4xl font-display mt-2">{stat.value}</p>
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+          {setupStatus?.organisationName && (
+            <span style={{ color: "#aaa", fontSize: "0.85rem" }}>
+              {setupStatus.organisationName}
+            </span>
+          )}
+          <button
+            onClick={() => setLocation("/login")}
+            style={{
+              background: "none",
+              border: "1px solid #444",
+              borderRadius: 8,
+              color: "#ccc",
+              padding: "0.4rem 1rem",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <LogOut style={{ width: 14, height: 14 }} />
+            Sign Out
+          </button>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main style={{ flex: 1, padding: "2.5rem 3rem" }}>
+        <div style={{ marginBottom: "2rem" }}>
+          <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: "#111", margin: 0 }}>
+            Administrator Dashboard
+          </h1>
+          <p style={{ color: "#777", marginTop: "0.4rem", fontSize: "0.9rem" }}>
+            Select an option below to manage your Fast Picker system.
+          </p>
+        </div>
+
+        {/* 5 menu cards */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: "1.5rem",
+          }}
+        >
+          {menuItems.map(({ label, icon: Icon, description, path }) => (
+            <button
+              key={label}
+              onClick={() => setLocation(path)}
+              style={{
+                background: "#fff",
+                border: "1.5px solid #e0e0e0",
+                borderRadius: 16,
+                padding: "2rem 1.75rem",
+                textAlign: "left",
+                cursor: "pointer",
+                transition: "box-shadow 0.15s, transform 0.15s",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.85rem",
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  background: "#111",
+                  borderRadius: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon style={{ width: 24, height: 24, color: "#fff" }} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#111", margin: "0 0 0.3rem 0" }}>
+                  {label}
+                </h2>
+                <p style={{ fontSize: "0.82rem", color: "#777", margin: 0, lineHeight: 1.5 }}>
+                  {description}
+                </p>
+              </div>
+            </button>
           ))}
-        </div>
-
-        <div className="bg-card rounded-xl shadow-sm border border-border/50 overflow-hidden">
-          <div className="p-6 border-b border-border/50">
-            <h2 className="text-lg font-semibold">Recent Activity</h2>
-          </div>
-          <div className="p-6 text-center text-muted-foreground py-12">
-            <Activity className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p>Your dashboard is ready. Start adding orders to see activity.</p>
-          </div>
         </div>
       </main>
     </div>
