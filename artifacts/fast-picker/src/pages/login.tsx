@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
+import { LiveClock } from "@/components/LiveClock";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -74,6 +75,11 @@ export default function Login() {
           filter: "brightness(0.9)",
         }}
       />
+
+      {/* Clock overlay — top right */}
+      <div style={{ position: "absolute", top: 20, right: 24, zIndex: 10 }}>
+        <LiveClock color="#fff" size="sm" />
+      </div>
 
       {/* Cards container */}
       <div

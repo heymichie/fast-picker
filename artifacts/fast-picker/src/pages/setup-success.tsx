@@ -1,4 +1,5 @@
 import { useLocation } from "wouter";
+import { LiveClock } from "@/components/LiveClock";
 
 export default function SetupSuccess() {
   const [, setLocation] = useLocation();
@@ -78,6 +79,11 @@ export default function SetupSuccess() {
         >
           SUCCESS!
         </h1>
+
+        {/* Live clock */}
+        <div style={{ marginBottom: "1rem" }}>
+          <LiveClock color="#888" size="sm" />
+        </div>
 
         {/* Proceed link */}
         <button

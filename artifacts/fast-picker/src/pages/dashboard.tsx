@@ -1,6 +1,7 @@
 import { useGetAdminSetup } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle } from "lucide-react";
+import { LiveClock } from "@/components/LiveClock";
 
 function getStoredUser() {
   try {
@@ -119,6 +120,8 @@ export default function Dashboard() {
               {setupStatus.organisationName}
             </span>
           )}
+
+          <LiveClock color="#aaa" size="sm" />
 
           <button
             onClick={() => { localStorage.removeItem("fp_user"); setLocation("/login"); }}

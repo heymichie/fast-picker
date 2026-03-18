@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { LiveClock } from "@/components/LiveClock";
 import {
   useCreateAdminSetup,
   useGetAdminSetup,
@@ -130,8 +131,13 @@ export default function AdminSetup() {
           flex: 1,
           background: "#ffffff",
           padding: "2.5rem 2.5rem",
+          position: "relative",
         }}
       >
+        {/* Clock — top right corner */}
+        <div style={{ position: "absolute", top: 16, right: 20 }}>
+          <LiveClock color="#555" size="sm" />
+        </div>
         {setupComplete ? (
           <div className="flex flex-col items-center text-center space-y-6 py-12">
             <CheckCircle2 className="h-20 w-20 text-green-600" />
