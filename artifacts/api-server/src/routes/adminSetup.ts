@@ -133,6 +133,7 @@ router.post("/login", async (req, res) => {
       }
       res.json({
         success: true,
+        isAdmin: true,
         username: admin.username,
         forenames: admin.forenames,
         surname: admin.surname,
@@ -176,6 +177,7 @@ router.post("/login", async (req, res) => {
 
     res.json({
       success: true,
+      isAdmin: false,
       username: user.username,
       forenames: user.forenames,
       surname: user.surname,

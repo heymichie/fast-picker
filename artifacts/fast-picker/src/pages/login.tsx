@@ -48,6 +48,7 @@ export default function Login() {
         forenames: body.forenames,
         surname: body.surname,
         designation: body.designation,
+        isAdmin: !!body.isAdmin,
       }));
       setLocation("/dashboard");
     } catch {

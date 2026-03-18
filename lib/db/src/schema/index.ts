@@ -19,3 +19,4 @@
 
 export * from "./adminSetup";
 export * from "./users";
+export * from "./userRights";

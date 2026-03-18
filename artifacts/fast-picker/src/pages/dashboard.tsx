@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useGetAdminSetup } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle } from "lucide-react";
@@ -7,42 +8,53 @@ function getStoredUser() {
   try {
     const raw = localStorage.getItem("fp_user");
     if (!raw) return null;
-    return JSON.parse(raw) as { username: string; forenames: string; surname: string; designation: string };
+    return JSON.parse(raw) as {
+      username: string;
+      forenames: string;
+      surname: string;
+      designation: string;
+      isAdmin: boolean;
+    };
   } catch {
     return null;
   }
 }
 
-const menuItems = [
+const ALL_MENU_ITEMS = [
   {
     label: "Create New Account",
     icon: UserPlus,
     description: "Add new pickers, supervisors or admin users to the system",
     path: "/create-account",
+    requiredPerms: ["Create New Accounts", "Create Order picker accounts"],
   },
   {
     label: "Manage Accounts",
     icon: Users,
     description: "View, edit and deactivate existing user accounts",
     path: "/manage-accounts",
+    requiredPerms: ["Manage Accounts", "Manage Order Picker Accounts"],
   },
   {
     label: "Reports",
     icon: BarChart2,
     description: "View picking performance, order history and analytics",
     path: "/reports",
+    requiredPerms: ["View Orders", "View Order Picker Performance", "Spool Reports"],
   },
   {
     label: "Setup Store Layout",
     icon: LayoutGrid,
     description: "Configure aisles, sections and product locations in store",
     path: "/store-layout",
+    requiredPerms: ["Setup branch layout"],
   },
   {
     label: "User Rights",
     icon: ShieldCheck,
     description: "Manage role permissions and access controls for all users",
     path: "/user-rights",
+    requiredPerms: ["Assign Account Rights"],
   },
 ];
 
@@ -50,6 +62,15 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: setupStatus, isLoading } = useGetAdminSetup();
   const user = getStoredUser();
+
+  const [userRights, setUserRights] = useState<Record<string, string[]> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/user-rights")
+      .then((r) => r.json())
+      .then((data) => setUserRights(data.permissions ?? {}))
+      .catch(() => setUserRights({}));
+  }, []);
 
   if (!isLoading && setupStatus && !setupStatus.isSetup) {
     setLocation("/setup");
@@ -63,6 +84,15 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  // Determine which menu items to show
+  const visibleItems = ALL_MENU_ITEMS.filter((item) => {
+    if (!user) return true; // not logged in, show all
+    if (user.isAdmin) return true; // system admins always see everything
+    if (!userRights) return true; // rights not loaded yet, show all
+    const rolePerms: string[] = userRights[user.designation] ?? [];
+    return item.requiredPerms.some((p) => rolePerms.includes(p));
+  });
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f2f2f0" }}>
@@ -79,7 +109,6 @@ export default function Dashboard() {
           flexShrink: 0,
         }}
       >
-        {/* Logo */}
         <img
           src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
           alt="Fast Picker"
@@ -87,19 +116,12 @@ export default function Dashboard() {
         />
 
         <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-          {/* User name display */}
           {user && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
               <div
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  background: "#333",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
+                  width: 36, height: 36, borderRadius: "50%", background: "#333",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}
               >
                 <UserCircle style={{ width: 22, height: 22, color: "#bbb" }} />
@@ -108,9 +130,7 @@ export default function Dashboard() {
                 <div style={{ color: "#fff", fontSize: "0.88rem", fontWeight: 600 }}>
                   {user.forenames} {user.surname}
                 </div>
-                <div style={{ color: "#888", fontSize: "0.72rem" }}>
-                  {user.designation}
-                </div>
+                <div style={{ color: "#888", fontSize: "0.72rem" }}>{user.designation}</div>
               </div>
             </div>
           )}
@@ -126,16 +146,9 @@ export default function Dashboard() {
           <button
             onClick={() => { localStorage.removeItem("fp_user"); setLocation("/login"); }}
             style={{
-              background: "none",
-              border: "1px solid #444",
-              borderRadius: 8,
-              color: "#ccc",
-              padding: "0.4rem 1rem",
-              fontSize: "0.85rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
+              background: "none", border: "1px solid #444", borderRadius: 8, color: "#ccc",
+              padding: "0.4rem 1rem", fontSize: "0.85rem", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
             }}
           >
             <LogOut style={{ width: 14, height: 14 }} />
@@ -148,70 +161,64 @@ export default function Dashboard() {
       <main style={{ flex: 1, padding: "2.5rem 3rem" }}>
         <div style={{ marginBottom: "2rem" }}>
           <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: "#111", margin: 0 }}>
-            Administrator Dashboard
+            {user?.isAdmin ? "Administrator" : (user?.designation ?? "User")} Dashboard
           </h1>
           <p style={{ color: "#777", marginTop: "0.4rem", fontSize: "0.9rem" }}>
             Select an option below to manage your Fast Picker system.
           </p>
         </div>
 
-        {/* 5 menu cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: "1.5rem",
-          }}
-        >
-          {menuItems.map(({ label, icon: Icon, description, path }) => (
-            <button
-              key={label}
-              onClick={() => setLocation(path)}
-              style={{
-                background: "#fff",
-                border: "1.5px solid #e0e0e0",
-                borderRadius: 16,
-                padding: "2rem 1.75rem",
-                textAlign: "left",
-                cursor: "pointer",
-                transition: "box-shadow 0.15s, transform 0.15s",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.85rem",
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-              }}
-            >
-              <div
+        {visibleItems.length === 0 ? (
+          <div style={{ padding: "3rem 0", color: "#999", fontSize: "0.95rem" }}>
+            No menu options are currently assigned to your role. Please contact your administrator.
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gap: "1.5rem",
+            }}
+          >
+            {visibleItems.map(({ label, icon: Icon, description, path }) => (
+              <button
+                key={label}
+                onClick={() => setLocation(path)}
                 style={{
-                  width: 48,
-                  height: 48,
-                  background: "#111",
-                  borderRadius: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  background: "#fff", border: "1.5px solid #e0e0e0", borderRadius: 16,
+                  padding: "2rem 1.75rem", textAlign: "left", cursor: "pointer",
+                  transition: "box-shadow 0.15s, transform 0.15s",
+                  display: "flex", flexDirection: "column", gap: "0.85rem",
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)";
+                  (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+                  (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
                 }}
               >
-                <Icon style={{ width: 24, height: 24, color: "#fff" }} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#111", margin: "0 0 0.3rem 0" }}>
-                  {label}
-                </h2>
-                <p style={{ fontSize: "0.82rem", color: "#777", margin: 0, lineHeight: 1.5 }}>
-                  {description}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
+                <div
+                  style={{
+                    width: 48, height: 48, background: "#111", borderRadius: 12,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <Icon style={{ width: 24, height: 24, color: "#fff" }} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#111", margin: "0 0 0.3rem 0" }}>
+                    {label}
+                  </h2>
+                  <p style={{ fontSize: "0.82rem", color: "#777", margin: 0, lineHeight: 1.5 }}>
+                    {description}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

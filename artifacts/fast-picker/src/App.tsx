@@ -10,6 +10,7 @@ import Dashboard from "@/pages/dashboard";
 import CreateAccount from "@/pages/create-account";
 import NewSignIn from "@/pages/new-signin";
 import UserSetupSuccess from "@/pages/user-setup-success";
+import UserRights from "@/pages/user-rights";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/create-account" component={CreateAccount} />
       <Route path="/new-signin" component={NewSignIn} />
       <Route path="/user-setup-success" component={UserSetupSuccess} />
+      <Route path="/user-rights" component={UserRights} />
       <Route component={NotFound} />
     </Switch>
   );
