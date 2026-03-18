@@ -41,7 +41,8 @@ export default function CreateAccount() {
   const currentUser = getStoredUser();
   const createdByName = currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "System";
 
-  const effectiveBranch = branchCode === "Other" ? otherBranch : branchCode;
+  const isAdminRole = rights === "Administrator";
+  const effectiveBranch = isAdminRole ? "ALL" : (branchCode === "Other" ? otherBranch : branchCode);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,7 +281,11 @@ export default function CreateAccount() {
                         name="rights"
                         value={r}
                         checked={rights === r}
-                        onChange={() => setRights(r)}
+                        onChange={() => {
+                          setRights(r);
+                          if (r === "Administrator") setBranchCode("ALL");
+                          else if (branchCode === "ALL") setBranchCode("");
+                        }}
                         style={{ accentColor: "#333", width: 15, height: 15 }}
                       />
                       {r}
@@ -291,49 +296,60 @@ export default function CreateAccount() {
             </tr>
 
             {/* Store Branch Code */}
-            <tr>
-              <td style={cellStyle(false)}>Store Branch Code</td>
+            <tr style={{ opacity: isAdminRole ? 0.38 : 1, transition: "opacity 0.2s" }}>
               <td style={cellStyle(false)}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {BRANCH_CODES.map((code) => (
-                    <label key={code} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#111" }}>
+                Store Branch Code
+                {isAdminRole && (
+                  <div style={{ fontSize: "0.72rem", color: "#555", marginTop: 3, fontStyle: "italic" }}>
+                    N/A — Administrators access all branches
+                  </div>
+                )}
+              </td>
+              <td style={cellStyle(false)}>
+                {isAdminRole ? (
+                  <span style={{ fontWeight: 600, color: "#444", fontSize: "0.95rem" }}>ALL</span>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {BRANCH_CODES.map((code) => (
+                      <label key={code} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#111" }}>
+                        <input
+                          type="radio"
+                          name="branchCode"
+                          value={code}
+                          checked={branchCode === code}
+                          onChange={() => setBranchCode(code)}
+                          style={{ accentColor: "#333", width: 15, height: 15 }}
+                        />
+                        {code}
+                      </label>
+                    ))}
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#111" }}>
                       <input
                         type="radio"
                         name="branchCode"
-                        value={code}
-                        checked={branchCode === code}
-                        onChange={() => setBranchCode(code)}
+                        value="Other"
+                        checked={branchCode === "Other"}
+                        onChange={() => setBranchCode("Other")}
                         style={{ accentColor: "#333", width: 15, height: 15 }}
                       />
-                      {code}
+                      Other
+                      {branchCode === "Other" && (
+                        <input
+                          type="text"
+                          value={otherBranch}
+                          onChange={(e) => setOtherBranch(e.target.value)}
+                          placeholder="Enter code..."
+                          style={{
+                            ...inputStyle,
+                            width: 140,
+                            borderBottom: "1.5px solid #555",
+                            marginLeft: 4,
+                          }}
+                        />
+                      )}
                     </label>
-                  ))}
-                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#111" }}>
-                    <input
-                      type="radio"
-                      name="branchCode"
-                      value="Other"
-                      checked={branchCode === "Other"}
-                      onChange={() => setBranchCode("Other")}
-                      style={{ accentColor: "#333", width: 15, height: 15 }}
-                    />
-                    Other
-                    {branchCode === "Other" && (
-                      <input
-                        type="text"
-                        value={otherBranch}
-                        onChange={(e) => setOtherBranch(e.target.value)}
-                        placeholder="Enter code..."
-                        style={{
-                          ...inputStyle,
-                          width: 140,
-                          borderBottom: "1.5px solid #555",
-                          marginLeft: 4,
-                        }}
-                      />
-                    )}
-                  </label>
-                </div>
+                  </div>
+                )}
               </td>
             </tr>
           </tbody>
