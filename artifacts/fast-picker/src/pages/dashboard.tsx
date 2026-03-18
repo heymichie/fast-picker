@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGetAdminSetup } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle } from "lucide-react";
+import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle, ClipboardList } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
 
 function getStoredUser() {
@@ -50,6 +50,13 @@ const ALL_MENU_ITEMS = [
     requiredPerms: ["Setup branch layout", "View branch layout"],
   },
   {
+    label: "Pick Orders",
+    icon: ClipboardList,
+    description: "View and action assigned picking orders for your branch",
+    path: "/pick-orders",
+    requiredPerms: ["Pick Orders"],
+  },
+  {
     label: "User Rights",
     icon: ShieldCheck,
     description: "Manage role permissions and access controls for all users",
@@ -57,6 +64,40 @@ const ALL_MENU_ITEMS = [
     requiredPerms: ["Assign Account Rights"],
   },
 ];
+
+const DEFAULT_ROLE_PERMS: Record<string, string[]> = {
+  "Order Picker": [
+    "View branch layout",
+    "View Orders",
+    "Pick Orders",
+    "Spool Reports",
+  ],
+  "Merchandiser": [
+    "View branch layout",
+    "View Orders",
+    "Spool Reports",
+  ],
+  "Store Supervisor": [
+    "Create Order picker accounts",
+    "Manage Order Picker Accounts",
+    "View Orders",
+    "View Order Picker Performance",
+    "Spool Reports",
+    "View branch layout",
+  ],
+  "Store Manager": [
+    "Create New Accounts",
+    "Create Order picker accounts",
+    "Manage Accounts",
+    "Manage Order Picker Accounts",
+    "View Orders",
+    "View Order Picker Performance",
+    "Spool Reports",
+    "Setup branch layout",
+    "View branch layout",
+    "Assign Account Rights",
+  ],
+};
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -90,7 +131,11 @@ export default function Dashboard() {
     if (!user) return true; // not logged in, show all
     if (user.isAdmin) return true; // system admins always see everything
     if (!userRights) return true; // rights not loaded yet, show all
-    const rolePerms: string[] = userRights[user.designation] ?? [];
+    // Use DB-configured rights if set, otherwise fall back to built-in defaults
+    const dbPerms: string[] | undefined = userRights[user.designation];
+    const rolePerms: string[] = (dbPerms && dbPerms.length > 0)
+      ? dbPerms
+      : (DEFAULT_ROLE_PERMS[user.designation] ?? []);
     return item.requiredPerms.some((p) => rolePerms.includes(p));
   });
 
