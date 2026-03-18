@@ -3,28 +3,22 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { 
-  useCreateAdminSetup, 
+import {
+  useCreateAdminSetup,
   useGetAdminSetup,
-  type CreateAdminSetupRequest
 } from "@workspace/api-client-react";
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-// Form validation schema
 const setupSchema = z.object({
-  organisationTradingName: z.string().min(1, "Trading name is required"),
-  administratorForenames: z.string().min(1, "Forename is required"),
-  surname: z.string().min(1, "Surname is required"),
-  designation: z.string().min(1, "Designation is required"),
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  retypePassword: z.string().min(6, "Please retype your password"),
-  productCode: z.string().min(1, "Product code is required"),
-}).refine((data) => data.password === data.retypePassword, {
+  organisationTradingName: z.string().min(1, "Required"),
+  administratorForenames: z.string().min(1, "Required"),
+  surname: z.string().min(1, "Required"),
+  designation: z.string().min(1, "Required"),
+  username: z.string().min(3, "Min 3 characters"),
+  password: z.string().min(6, "Min 6 characters"),
+  retypePassword: z.string().min(6, "Required"),
+  productCode: z.string().min(1, "Required"),
+}).refine((d) => d.password === d.retypePassword, {
   message: "Passwords do not match",
   path: ["retypePassword"],
 });
@@ -36,7 +30,6 @@ export default function AdminSetup() {
   const [setupComplete, setSetupComplete] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Check if already setup
   const { data: setupStatus, isLoading: isCheckingSetup } = useGetAdminSetup();
 
   const {
@@ -45,12 +38,11 @@ export default function AdminSetup() {
     formState: { errors, isSubmitting },
   } = useForm<SetupFormValues>({
     resolver: zodResolver(setupSchema),
-    mode: "onBlur"
+    mode: "onBlur",
   });
 
   const createSetup = useCreateAdminSetup();
 
-  // Redirect if already setup
   useEffect(() => {
     if (setupStatus?.isSetup && !setupComplete) {
       setLocation("/dashboard");
@@ -60,303 +52,263 @@ export default function AdminSetup() {
   const onSubmit = async (data: SetupFormValues) => {
     setApiError(null);
     try {
-      // The hook expects the variables in a `data` property
       await createSetup.mutateAsync({ data });
       setSetupComplete(true);
-      // Brief pause to show success state before redirect
-      setTimeout(() => {
-        setLocation("/dashboard");
-      }, 2000);
+      setTimeout(() => setLocation("/dashboard"), 2000);
     } catch (err: any) {
-      // Handle the error type properly
-      const errorMsg = err?.response?.data?.error || err.message || "An unexpected error occurred during setup.";
-      setApiError(errorMsg);
+      const msg = err?.response?.data?.error || err.message || "An unexpected error occurred.";
+      setApiError(msg);
     }
   };
 
   if (isCheckingSetup) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#111" }}>
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
       </div>
     );
   }
 
-  // If already setup, render nothing while useEffect redirects
   if (setupStatus?.isSetup && !setupComplete) return null;
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white overflow-hidden">
-      
-      {/* Left Panel - Branding (Dark) */}
-      <div className="w-full lg:w-5/12 bg-[#050505] text-white flex flex-col relative overflow-hidden min-h-[30vh] lg:min-h-screen">
-        {/* Abstract Background Texture */}
-        <div 
-          className="absolute inset-0 opacity-40 mix-blend-overlay pointer-events-none"
+    <div
+      className="min-h-screen w-full flex items-stretch relative"
+    >
+      {/* Left dark panel with clothing background */}
+      <div
+        className="flex flex-col items-center justify-between py-12 px-10 relative overflow-hidden"
+        style={{
+          width: "42%",
+          minWidth: 280,
+          background: "#0a0a0a",
+        }}
+      >
+        {/* Clothing background image visible through dark overlay */}
+        <div
           style={{
+            position: "absolute",
+            inset: 0,
             backgroundImage: `url('${import.meta.env.BASE_URL}images/dark-apparel-bg.png')`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            opacity: 0.35,
           }}
         />
-        
-        {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-transparent to-black/90 pointer-events-none" />
+        {/* Dark overlay to ensure readability */}
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
+        {/* Logo area - centered vertically in upper portion */}
+        <div className="flex-1 flex flex-col items-center justify-center" style={{ position: "relative", zIndex: 1 }}>
+          <img
+            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+            alt="Fast Picker - Mishka Technologies"
+            style={{ width: "75%", maxWidth: 300, objectFit: "contain" }}
+          />
+        </div>
 
-        <div className="relative z-10 flex flex-col h-full p-10 md:p-16 lg:p-20 justify-between">
-          
-          {/* Top Brand Area */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="flex flex-col"
+        {/* Hello Welcome */}
+        <div className="w-full text-left" style={{ position: "relative", zIndex: 1 }}>
+          <p
+            style={{
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontSize: "clamp(2rem, 5vw, 3.5rem)",
+              color: "#fff",
+              fontWeight: 400,
+              lineHeight: 1.15,
+              margin: 0,
+            }}
           >
-            {/* Minimal Clothes Hanger SVG */}
-            <svg 
-              width="48" height="48" viewBox="0 0 24 24" 
-              fill="none" stroke="currentColor" strokeWidth="1.5" 
-              strokeLinecap="round" strokeLinejoin="round" 
-              className="mb-6 opacity-90"
-            >
-              <path d="M12 2v4M8.5 7.5A3.5 3.5 0 1 1 12 4v4m0 0L3 18h18L12 8Z" />
-            </svg>
-            
-            <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tighter mb-2">
-              FAST PICKER
-            </h1>
-            <p className="font-sans text-sm md:text-base tracking-[0.2em] text-white/60 uppercase font-medium">
-              Mishka Technologies
-            </p>
-          </motion.div>
-
-          {/* Bottom Greeting */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.5 }}
-            className="mt-16 lg:mt-0"
-          >
-            <h2 className="font-serif italic text-4xl md:text-5xl lg:text-6xl text-white/90 font-light tracking-wide">
-              Hello,<br />Welcome!
-            </h2>
-          </motion.div>
+            Hello,<br />Welcome!
+          </p>
         </div>
       </div>
 
-      {/* Right Panel - Setup Form (Light) */}
-      <div className="w-full lg:w-7/12 flex flex-col items-center justify-center p-6 sm:p-10 md:p-16 bg-white relative">
-        
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="w-full max-w-2xl"
-        >
-          {setupComplete ? (
-            <div className="flex flex-col items-center text-center space-y-6 py-12">
-              <motion.div 
-                initial={{ scale: 0 }} 
-                animate={{ scale: 1 }} 
-                transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              >
-                <CheckCircle2 className="h-24 w-24 text-green-500 mx-auto" />
-              </motion.div>
-              <div>
-                <h2 className="text-3xl font-display font-bold text-foreground mb-3">Setup Complete</h2>
-                <p className="text-muted-foreground text-lg">Your administrator account has been created. Redirecting to dashboard...</p>
-              </div>
+      {/* Right white form panel */}
+      <div
+        className="flex flex-col items-center justify-center"
+        style={{
+          flex: 1,
+          background: "#ffffff",
+          padding: "2.5rem 2.5rem",
+        }}
+      >
+        {setupComplete ? (
+          <div className="flex flex-col items-center text-center space-y-6 py-12">
+            <CheckCircle2 className="h-20 w-20 text-green-600" />
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Setup Complete</h2>
+              <p className="text-gray-500">Redirecting to dashboard...</p>
             </div>
-          ) : (
-            <>
-              <div className="mb-10">
-                <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground tracking-tight">
-                  Administrator Setup
-                </h2>
-                <p className="text-muted-foreground mt-2">
-                  Configure the primary account for your organisation.
-                </p>
+          </div>
+        ) : (
+          <div className="w-full" style={{ maxWidth: 560 }}>
+            <h1
+              style={{
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontSize: "clamp(1.6rem, 3vw, 2.2rem)",
+                fontWeight: 400,
+                color: "#111",
+                marginBottom: "1.25rem",
+                textAlign: "center",
+              }}
+            >
+              Administrator Setup
+            </h1>
+
+            {apiError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded flex items-start gap-2 text-red-700 text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                {apiError}
               </div>
+            )}
 
-              {apiError && (
-                <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3 text-destructive">
-                  <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium">{apiError}</p>
-                </div>
-              )}
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  border: "2px solid #111",
+                  fontSize: "0.88rem",
+                }}
+              >
+                <tbody>
+                  <TableRow label="Organisation Trading Name" error={errors.organisationTradingName?.message} isHeader>
+                    <TableInput {...register("organisationTradingName")} type="text" />
+                  </TableRow>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-1">
-                
-                {/* Custom Table-like Form Rows */}
-                <div className="border-t border-border/60">
-                  <FormRow 
-                    label="Organisation Trading Name" 
-                    error={errors.organisationTradingName?.message}
-                  >
-                    <input 
-                      {...register("organisationTradingName")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.organisationTradingName && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="Enter trading name"
-                    />
-                  </FormRow>
+                  <TableRow label="Organisational ID">
+                    <span style={{ color: "#aaa", fontStyle: "italic", padding: "0 0.5rem" }}>Auto generated</span>
+                  </TableRow>
 
-                  <FormRow label="Organisational ID">
-                    <input 
-                      disabled
-                      className="form-table-input italic text-muted-foreground"
-                      placeholder="Auto generated"
-                    />
-                  </FormRow>
+                  <TableRow label="Administrator's Forename(s)" error={errors.administratorForenames?.message}>
+                    <TableInput {...register("administratorForenames")} type="text" />
+                  </TableRow>
 
-                  <FormRow 
-                    label="Administrator's Forename(s)"
-                    error={errors.administratorForenames?.message}
-                  >
-                    <input 
-                      {...register("administratorForenames")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.administratorForenames && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="First name(s)"
-                    />
-                  </FormRow>
+                  <TableRow label="Surname" error={errors.surname?.message}>
+                    <TableInput {...register("surname")} type="text" />
+                  </TableRow>
 
-                  <FormRow 
-                    label="Surname"
-                    error={errors.surname?.message}
-                  >
-                    <input 
-                      {...register("surname")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.surname && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="Last name"
-                    />
-                  </FormRow>
+                  <TableRow label="Designation" error={errors.designation?.message}>
+                    <TableInput {...register("designation")} type="text" />
+                  </TableRow>
 
-                  <FormRow 
-                    label="Designation"
-                    error={errors.designation?.message}
-                  >
-                    <input 
-                      {...register("designation")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.designation && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="e.g. Store Manager"
-                    />
-                  </FormRow>
+                  <TableRow label="Username" error={errors.username?.message}>
+                    <TableInput {...register("username")} type="text" />
+                  </TableRow>
 
-                  <FormRow 
-                    label="Username"
-                    error={errors.username?.message}
-                  >
-                    <input 
-                      {...register("username")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.username && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="Choose a username"
-                    />
-                  </FormRow>
+                  <TableRow label="Password" error={errors.password?.message}>
+                    <TableInput {...register("password")} type="password" />
+                  </TableRow>
 
-                  <FormRow 
-                    label="Password"
-                    error={errors.password?.message}
-                  >
-                    <input 
-                      type="password"
-                      {...register("password")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.password && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="••••••••"
-                    />
-                  </FormRow>
+                  <TableRow label="Retype Password" error={errors.retypePassword?.message}>
+                    <TableInput {...register("retypePassword")} type="password" />
+                  </TableRow>
 
-                  <FormRow 
-                    label="Retype Password"
-                    error={errors.retypePassword?.message}
-                  >
-                    <input 
-                      type="password"
-                      {...register("retypePassword")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.retypePassword && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="••••••••"
-                    />
-                  </FormRow>
+                  <TableRow label="Product Code" error={errors.productCode?.message}>
+                    <TableInput {...register("productCode")} type="text" />
+                  </TableRow>
+                </tbody>
+              </table>
 
-                  <FormRow 
-                    label="Product Code"
-                    error={errors.productCode?.message}
-                  >
-                    <input 
-                      {...register("productCode")}
-                      className={cn(
-                        "form-table-input", 
-                        errors.productCode && "ring-1 ring-destructive/50 bg-destructive/5"
-                      )}
-                      placeholder="Enter license/product code"
-                    />
-                  </FormRow>
-                </div>
-
-                <div className="pt-10 flex justify-center">
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="w-full sm:w-64 h-14 text-base font-semibold tracking-wide shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
-                  >
-                    {isSubmitting ? (
-                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Activating...</>
-                    ) : (
-                      "Activate"
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </>
-          )}
-        </motion.div>
+              <div style={{ marginTop: "1.5rem", display: "flex", justifyContent: "center" }}>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  style={{
+                    background: "#111",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 4,
+                    padding: "0.85rem 0",
+                    width: "70%",
+                    fontSize: "1rem",
+                    fontWeight: 500,
+                    letterSpacing: "0.05em",
+                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    opacity: isSubmitting ? 0.7 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  {isSubmitting ? (
+                    <><Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} /> Activating...</>
+                  ) : (
+                    "Activate"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Helper component for the table-style rows
-function FormRow({ 
-  label, 
-  error, 
-  children 
-}: { 
-  label: string; 
-  error?: string; 
-  children: React.ReactNode 
+function TableRow({
+  label,
+  error,
+  isHeader,
+  children,
+}: {
+  label: string;
+  error?: string;
+  isHeader?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="form-table-row relative group">
-      <div className="form-table-label flex flex-col md:justify-center h-full">
-        <label className="leading-tight">{label}</label>
+    <tr>
+      <td
+        style={{
+          border: "1px solid #111",
+          padding: "0.55rem 0.75rem",
+          width: "46%",
+          fontWeight: isHeader ? 700 : 400,
+          verticalAlign: "middle",
+          background: "#fff",
+          color: "#111",
+          lineHeight: 1.35,
+        }}
+      >
+        {label}
         {error && (
-          <span className="text-xs text-destructive mt-1 md:absolute md:-bottom-2 md:left-[240px] md:translate-y-full block">
+          <div style={{ color: "#c00", fontSize: "0.72rem", marginTop: 2, fontWeight: 400 }}>
             {error}
-          </span>
+          </div>
         )}
-      </div>
-      <div className="mt-1 md:mt-0 relative">
-        {children}
-      </div>
-    </div>
+      </td>
+      <td
+        style={{
+          border: "1px solid #111",
+          padding: 0,
+          background: "#111",
+          verticalAlign: "middle",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", minHeight: 36, padding: "0.25rem 0" }}>
+          {children}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function TableInput({ type = "text", ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      type={type}
+      {...props}
+      style={{
+        background: "transparent",
+        border: "none",
+        outline: "none",
+        color: "#fff",
+        width: "100%",
+        padding: "0.35rem 0.6rem",
+        fontSize: "0.88rem",
+      }}
+    />
   );
 }
