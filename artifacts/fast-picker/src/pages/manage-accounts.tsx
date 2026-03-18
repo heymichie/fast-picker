@@ -45,13 +45,21 @@ export default function ManageAccounts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isAdministrator = !!(user?.isAdmin || user?.designation === "Administrator");
+
   useEffect(() => {
     fetch("/api/accounts/all")
       .then((r) => r.json())
-      .then((data: AccountRow[]) => setAccounts(data))
+      .then((data: AccountRow[]) => {
+        if (isAdministrator) {
+          setAccounts(data);
+        } else {
+          setAccounts(data.filter((a) => a.rights === "Order Picker"));
+        }
+      })
       .catch(() => setError("Failed to load accounts."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdministrator]);
 
   const headerCellStyle: React.CSSProperties = {
     padding: "10px 12px",
