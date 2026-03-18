@@ -49,6 +49,7 @@ export default function Login() {
         surname: body.surname,
         designation: body.designation,
         isAdmin: !!body.isAdmin,
+        branchCode: body.branchCode ?? null,
       }));
       setLocation("/dashboard");
     } catch {

@@ -14,7 +14,7 @@ function getStoredUser() {
   try {
     const raw = localStorage.getItem("fp_user");
     if (!raw) return null;
-    return JSON.parse(raw) as { username: string; forenames: string; surname: string; designation: string };
+    return JSON.parse(raw) as { username: string; forenames: string; surname: string; designation: string; isAdmin?: boolean; branchCode?: string | null };
   } catch {
     return null;
   }
@@ -43,9 +43,12 @@ export default function CreateAccount() {
   const createdByName = currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "System";
 
   const isStoreManager = currentUser?.designation === "Store Manager";
+  const storeManagerBranch = currentUser?.branchCode ?? null;
   const RIGHTS = isStoreManager ? STORE_MANAGER_RIGHTS : ALL_RIGHTS;
   const isAdminRole = rights === "Administrator";
-  const effectiveBranch = isAdminRole ? "ALL" : (branchCode === "Other" ? otherBranch : branchCode);
+  const branchLocked = isAdminRole || isStoreManager;
+  const lockedBranchLabel = isAdminRole ? "ALL" : (storeManagerBranch ?? "—");
+  const effectiveBranch = isAdminRole ? "ALL" : isStoreManager ? (storeManagerBranch ?? "") : (branchCode === "Other" ? otherBranch : branchCode);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -299,7 +302,7 @@ export default function CreateAccount() {
             </tr>
 
             {/* Store Branch Code */}
-            <tr style={{ opacity: isAdminRole ? 0.38 : 1, transition: "opacity 0.2s" }}>
+            <tr style={{ opacity: branchLocked ? 0.38 : 1, transition: "opacity 0.2s" }}>
               <td style={cellStyle(false)}>
                 Store Branch Code
                 {isAdminRole && (
@@ -307,10 +310,15 @@ export default function CreateAccount() {
                     N/A — Administrators access all branches
                   </div>
                 )}
+                {isStoreManager && (
+                  <div style={{ fontSize: "0.72rem", color: "#555", marginTop: 3, fontStyle: "italic" }}>
+                    Assigned to your branch
+                  </div>
+                )}
               </td>
               <td style={cellStyle(false)}>
-                {isAdminRole ? (
-                  <span style={{ fontWeight: 600, color: "#444", fontSize: "0.95rem" }}>ALL</span>
+                {branchLocked ? (
+                  <span style={{ fontWeight: 600, color: "#444", fontSize: "0.95rem" }}>{lockedBranchLabel}</span>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {BRANCH_CODES.map((code) => (

@@ -182,6 +182,7 @@ router.post("/login", async (req, res) => {
       forenames: user.forenames,
       surname: user.surname,
       designation: user.rights,
+      branchCode: user.branchCode,
       message: "Login successful",
     });
   } catch {
