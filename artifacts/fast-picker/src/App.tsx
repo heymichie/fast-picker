@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import AdminSetup from "@/pages/admin-setup";
+import SetupSuccess from "@/pages/setup-success";
 import Dashboard from "@/pages/dashboard";
 import NotFound from "@/pages/not-found";
 
@@ -19,9 +20,10 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
-      {/* Setup acts as the entry point based on requirements */}
       <Route path="/" component={AdminSetup} />
       <Route path="/setup" component={AdminSetup} />
+      <Route path="/setup-success" component={SetupSuccess} />
+      <Route path="/login" component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>

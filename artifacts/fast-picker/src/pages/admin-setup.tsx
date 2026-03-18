@@ -54,7 +54,7 @@ export default function AdminSetup() {
     try {
       await createSetup.mutateAsync({ data });
       setSetupComplete(true);
-      setTimeout(() => setLocation("/dashboard"), 2000);
+      setTimeout(() => setLocation("/setup-success"), 300);
     } catch (err: any) {
       const msg = err?.response?.data?.error || err.message || "An unexpected error occurred.";
       setApiError(msg);
