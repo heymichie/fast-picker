@@ -1,6 +1,16 @@
 import { useGetAdminSetup } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut } from "lucide-react";
+import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle } from "lucide-react";
+
+function getStoredUser() {
+  try {
+    const raw = localStorage.getItem("fp_user");
+    if (!raw) return null;
+    return JSON.parse(raw) as { username: string; forenames: string; surname: string; designation: string };
+  } catch {
+    return null;
+  }
+}
 
 const menuItems = [
   {
@@ -38,6 +48,7 @@ const menuItems = [
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: setupStatus, isLoading } = useGetAdminSetup();
+  const user = getStoredUser();
 
   if (!isLoading && setupStatus && !setupStatus.isSetup) {
     setLocation("/setup");
@@ -75,13 +86,42 @@ export default function Dashboard() {
         />
 
         <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+          {/* User name display */}
+          {user && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: "#333",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <UserCircle style={{ width: 22, height: 22, color: "#bbb" }} />
+              </div>
+              <div style={{ lineHeight: 1.25 }}>
+                <div style={{ color: "#fff", fontSize: "0.88rem", fontWeight: 600 }}>
+                  {user.forenames} {user.surname}
+                </div>
+                <div style={{ color: "#888", fontSize: "0.72rem" }}>
+                  {user.designation}
+                </div>
+              </div>
+            </div>
+          )}
+
           {setupStatus?.organisationName && (
-            <span style={{ color: "#aaa", fontSize: "0.85rem" }}>
+            <span style={{ color: "#555", fontSize: "0.8rem", borderLeft: "1px solid #333", paddingLeft: "1.25rem" }}>
               {setupStatus.organisationName}
             </span>
           )}
+
           <button
-            onClick={() => setLocation("/login")}
+            onClick={() => { localStorage.removeItem("fp_user"); setLocation("/login"); }}
             style={{
               background: "none",
               border: "1px solid #444",

@@ -37,6 +37,13 @@ export default function Login() {
         setApiError(body.error || "Invalid username or password");
         return;
       }
+      const body = await res.json();
+      localStorage.setItem("fp_user", JSON.stringify({
+        username: body.username,
+        forenames: body.forenames,
+        surname: body.surname,
+        designation: body.designation,
+      }));
       setLocation("/dashboard");
     } catch {
       setApiError("Unable to connect. Please try again.");
