@@ -12,6 +12,7 @@ export const ordersTable = pgTable("orders", {
   assignedPickerId: text("assigned_picker_id"),
   assignedPickerName: text("assigned_picker_name"),
   itemCount: integer("item_count").notNull().default(0),
+  departmentCounts: text("department_counts"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

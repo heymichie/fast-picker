@@ -83,6 +83,9 @@ export default function ViewOrders() {
   const [, setLocation] = useLocation();
   const user = getStoredUser();
 
+  const isOrderPicker = user?.designation === "Order Picker";
+  const isAdmin = user?.isAdmin === true;
+
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -90,9 +93,22 @@ export default function ViewOrders() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Load available branches
+  // Build query params — Order Pickers always scope to their own pickerId
+  function buildParams(extraStatus?: string) {
+    const params = new URLSearchParams();
+    if (isOrderPicker && user?.username) {
+      params.set("pickerId", user.username);
+    } else {
+      if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
+    }
+    const s = extraStatus ?? statusFilter;
+    if (s && s !== "all") params.set("status", s);
+    return params;
+  }
+
+  // Load available branches (not needed for Order Pickers)
   useEffect(() => {
-    const isAdmin = user?.isAdmin === true;
+    if (isOrderPicker) return;
     if (isAdmin) {
       fetch("/api/orders/branches")
         .then((r) => r.json())
@@ -107,10 +123,7 @@ export default function ViewOrders() {
   // Fetch orders
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
-    if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
-    fetch(`/api/orders?${params}`)
+    fetch(`/api/orders?${buildParams()}`)
       .then((r) => r.json())
       .then((data: Order[]) => { setOrders(Array.isArray(data) ? data : []); setLastRefresh(new Date()); })
       .catch(() => setOrders([]))
@@ -120,10 +133,7 @@ export default function ViewOrders() {
   // Auto-refresh every 60 seconds
   useEffect(() => {
     const id = setInterval(() => {
-      const params = new URLSearchParams();
-      if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
-      if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
-      fetch(`/api/orders?${params}`)
+      fetch(`/api/orders?${buildParams()}`)
         .then((r) => r.json())
         .then((data: Order[]) => { setOrders(Array.isArray(data) ? data : []); setLastRefresh(new Date()); })
         .catch(() => {});
@@ -134,9 +144,7 @@ export default function ViewOrders() {
   // ── Stats (from ALL orders for selected branch, ignoring status filter) ──
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
-    fetch(`/api/orders?${params}`)
+    fetch(`/api/orders?${buildParams("all")}`)
       .then((r) => r.json())
       .then((data: Order[]) => setAllOrders(Array.isArray(data) ? data : []))
       .catch(() => setAllOrders([]));

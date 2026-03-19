@@ -276,8 +276,11 @@ export default function ManageAccounts() {
                               }}
                             >
                               <option value="">— None —</option>
+                              <option value="ALL">ALL</option>
                               {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-                              {extraOpt && <option value={extraOpt}>{extraOpt}</option>}
+                              {extraOpt && !["ALL"].includes(extraOpt) && (
+                                <option value={extraOpt}>{extraOpt}</option>
+                              )}
                             </select>
                             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                               <ActionBtn label="Save" variant="save" onClick={() => commitSave(row.username)} disabled={isSaving} />
