@@ -556,6 +556,7 @@ export default function PickOrders() {
         canReassign={canReassign}
         onClose={() => setDetailOrder(null)}
         onReassigned={() => { fetchOrders(); }}
+        onDispatched={() => { fetchOrders(); }}
       />
     </div>
   );

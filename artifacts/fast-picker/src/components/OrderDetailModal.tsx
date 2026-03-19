@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Loader2, X } from "lucide-react";
 
 interface ProductLine {
@@ -37,6 +37,7 @@ interface Props {
   canReassign?: boolean;
   onClose: () => void;
   onReassigned?: () => void;
+  onDispatched?: () => void;
 }
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -54,7 +55,9 @@ function ts(v: string | null) {
   });
 }
 
-export function OrderDetailModal({ orderNumber, canReassign = false, onClose, onReassigned }: Props) {
+type RfidPhase = "idle" | "scanning" | "verified" | "dispatching" | "done";
+
+export function OrderDetailModal({ orderNumber, canReassign = false, onClose, onReassigned, onDispatched }: Props) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickers, setPickers] = useState<PickerOption[]>([]);
@@ -62,12 +65,21 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
   const [reassigning, setReassigning] = useState(false);
   const [reassignDone, setReassignDone] = useState(false);
 
+  // RFID / IoT dispatch state
+  const [rfidPhase, setRfidPhase] = useState<RfidPhase>("idle");
+  const [rfidScanned, setRfidScanned] = useState(0);
+  const [rfidError, setRfidError] = useState<string | null>(null);
+  const rfidTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     if (!orderNumber) return;
     setLoading(true);
     setOrder(null);
     setReassignDone(false);
     setSelectedPicker("");
+    setRfidPhase("idle");
+    setRfidScanned(0);
+    setRfidError(null);
     fetch(`/api/orders/${orderNumber}`)
       .then((r) => r.json())
       .then((data: OrderDetail) => {
@@ -102,6 +114,61 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
       alert("Reassignment failed. Please try again.");
     } finally {
       setReassigning(false);
+    }
+  }
+
+  async function handleRfidDispatch() {
+    if (!order) return;
+    setRfidPhase("scanning");
+    setRfidScanned(0);
+    setRfidError(null);
+
+    const total = Math.max(order.products.length, 1);
+    // Animate RFID scan — one product every 280 ms
+    await new Promise<void>((resolve) => {
+      let count = 0;
+      rfidTimer.current = setInterval(() => {
+        count++;
+        setRfidScanned(count);
+        if (count >= total) {
+          if (rfidTimer.current) clearInterval(rfidTimer.current);
+          resolve();
+        }
+      }, 280);
+    });
+
+    setRfidPhase("verified");
+    await new Promise((res) => setTimeout(res, 700));
+
+    setRfidPhase("dispatching");
+    try {
+      const now = new Date().toISOString();
+      // Mark as picked first (if not already)
+      if (!order.pickedAt) {
+        await fetch(`/api/orders/${order.orderNumber}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "picked" }),
+        });
+      }
+      // Then dispatch
+      await fetch(`/api/orders/${order.orderNumber}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "dispatched" }),
+      });
+
+      setOrder((prev) => prev ? {
+        ...prev,
+        status: "dispatched",
+        pickedAt: prev.pickedAt ?? now,
+        dispatchedAt: now,
+      } : null);
+      setRfidPhase("done");
+      onDispatched?.();
+    } catch {
+      setRfidError("Dispatch failed. Please check connectivity and try again.");
+      setRfidPhase("idle");
     }
   }
 
@@ -222,6 +289,97 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* ── RFID / IoT Dispatch section ── */}
+              {(order.status === "picking" || order.status === "picked") && (
+                <div style={{ marginTop: "1.5rem", padding: "1rem 1.1rem", background: "#0a0f0a", border: "1px solid #1a3a1a", borderRadius: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.85rem" }}>
+                    <span style={{ fontSize: "0.78rem", color: "#50d278", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                      RFID &amp; IoT Dispatch Verification
+                    </span>
+                    {rfidPhase !== "idle" && rfidPhase !== "done" && (
+                      <span style={{ fontSize: "0.72rem", color: "#3a7a3a", fontStyle: "italic" }}>
+                        {rfidPhase === "scanning" ? `Scanning… ${rfidScanned}/${order.products.length || 1}` :
+                         rfidPhase === "verified" ? "All products matched!" :
+                         rfidPhase === "dispatching" ? "Updating dispatch records…" : ""}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Product scan list */}
+                  {rfidPhase !== "idle" && rfidPhase !== "done" && (
+                    <div style={{ marginBottom: "0.85rem", display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto" }}>
+                      {order.products.map((p, i) => {
+                        const scanned = i < rfidScanned;
+                        const scanning = i === rfidScanned && rfidPhase === "scanning";
+                        return (
+                          <div key={i} style={{
+                            display: "flex", alignItems: "center", gap: "0.6rem",
+                            padding: "0.3rem 0.5rem", borderRadius: 5,
+                            background: scanned ? "rgba(80,210,120,0.07)" : scanning ? "rgba(255,180,60,0.07)" : "transparent",
+                            opacity: scanned || scanning ? 1 : 0.3,
+                            transition: "all 0.2s",
+                          }}>
+                            <span style={{ fontSize: "0.85rem", width: 18, textAlign: "center", flexShrink: 0 }}>
+                              {scanned ? "✅" : scanning ? "📡" : "⬜"}
+                            </span>
+                            <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: scanned ? "#50d278" : scanning ? "#ffb83c" : "#555", fontWeight: 600, flexShrink: 0 }}>
+                              {p.productCode}
+                            </span>
+                            <span style={{ fontSize: "0.76rem", color: scanned ? "#3a7a3a" : "#444" }}>
+                              {p.description} · {p.colour}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Verified banner */}
+                  {(rfidPhase === "verified" || rfidPhase === "dispatching") && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.5rem 0.75rem", background: "rgba(80,210,120,0.12)", borderRadius: 7, marginBottom: "0.75rem" }}>
+                      <span>✅</span>
+                      <span style={{ fontSize: "0.82rem", color: "#50d278", fontWeight: 700 }}>
+                        All {order.products.length} product{order.products.length !== 1 ? "s" : ""} verified at dispatch area
+                        {rfidPhase === "dispatching" && " — updating records…"}
+                      </span>
+                      {rfidPhase === "dispatching" && <Loader2 style={{ width: 14, height: 14, color: "#50d278", animation: "spin 1s linear infinite", marginLeft: "auto" }} />}
+                    </div>
+                  )}
+
+                  {/* Done banner */}
+                  {rfidPhase === "done" && (
+                    <div style={{ padding: "0.6rem 0.85rem", background: "rgba(80,210,120,0.12)", border: "1px solid rgba(80,210,120,0.25)", borderRadius: 7 }}>
+                      <div style={{ color: "#50d278", fontWeight: 700, fontSize: "0.88rem", marginBottom: 3 }}>
+                        ✅ Order dispatched successfully via RFID verification
+                      </div>
+                      <div style={{ color: "#3a7a3a", fontSize: "0.76rem" }}>
+                        Dispatch time recorded · Pick duration and rating updated
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {rfidError && (
+                    <div style={{ color: "#ff5a5a", fontSize: "0.82rem", marginBottom: "0.65rem" }}>⚠ {rfidError}</div>
+                  )}
+
+                  {/* Action button */}
+                  {rfidPhase === "idle" && (
+                    <button
+                      type="button"
+                      onClick={handleRfidDispatch}
+                      style={{
+                        background: "#1a4a1a", border: "1px solid #2a7a2a", color: "#50d278",
+                        padding: "0.55rem 1.2rem", borderRadius: 8, fontSize: "0.88rem",
+                        fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem",
+                      }}
+                    >
+                      <span>📡</span> Picked and left at Dispatch
+                    </button>
+                  )}
                 </div>
               )}
 

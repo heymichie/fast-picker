@@ -512,6 +512,7 @@ export default function ViewOrders() {
         canReassign={canReassign}
         onClose={() => setDetailOrder(null)}
         onReassigned={() => { fetchOrders(); }}
+        onDispatched={() => { fetchOrders(); }}
       />
     </div>
   );
