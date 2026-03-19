@@ -355,6 +355,7 @@ export default function SetupStoreLayout() {
     for (let i = 0; i < formProducts.length; i++) {
       const p = formProducts[i];
       const label = formProducts.length > 1 ? ` (Product ${i + 1})` : "";
+      if (!p.productCode.trim()) { alert(`Please enter a product code${label}.`); return; }
       if (!p.dept.trim()) { alert(`Please enter a product department${label}.`); return; }
       if (!p.category.trim()) { alert(`Please enter a product category${label}.`); return; }
       if (!p.colour.trim()) { alert(`Please enter a colour${label}.`); return; }
@@ -741,6 +742,18 @@ export default function SetupStoreLayout() {
                   </div>
 
                   <div>
+                    <label style={labelStyle}>Product Code *</label>
+                    <input
+                      type="text"
+                      value={p.productCode}
+                      onChange={(e) => updateProduct(i, "productCode", e.target.value)}
+                      placeholder="e.g. MSW-SHT-001"
+                      style={inputStyle}
+                      autoFocus={i === 0}
+                    />
+                  </div>
+
+                  <div>
                     <label style={labelStyle}>Department *</label>
                     <input
                       type="text"
@@ -748,7 +761,6 @@ export default function SetupStoreLayout() {
                       onChange={(e) => updateProduct(i, "dept", e.target.value)}
                       placeholder="e.g. Menswear"
                       style={inputStyle}
-                      autoFocus={i === 0}
                     />
                   </div>
 
@@ -781,17 +793,6 @@ export default function SetupStoreLayout() {
                       value={p.description}
                       onChange={(e) => updateProduct(i, "description", e.target.value)}
                       placeholder="e.g. Formal long-sleeve shirts"
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Product Code</label>
-                    <input
-                      type="text"
-                      value={p.productCode}
-                      onChange={(e) => updateProduct(i, "productCode", e.target.value)}
-                      placeholder="e.g. MSW-SHT-001"
                       style={inputStyle}
                     />
                   </div>
