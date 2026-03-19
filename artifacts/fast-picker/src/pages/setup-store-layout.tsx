@@ -19,6 +19,13 @@ function getStoredUser() {
   }
 }
 
+interface ProductEntry {
+  dept: string;
+  category: string;
+  colour: string;
+  description: string;
+}
+
 interface Rail {
   id: string;
   x: number;
@@ -29,6 +36,7 @@ interface Rail {
   category: string;
   colour: string;
   description: string;
+  products?: ProductEntry[];
 }
 
 interface PendingRect {
@@ -174,10 +182,7 @@ export default function SetupStoreLayout() {
   // Pending rect waiting for form input
   const [pendingRect, setPendingRect] = useState<PendingRect | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formDept, setFormDept] = useState("");
-  const [formCats, setFormCats] = useState<string[]>([""]);
-  const [formColours, setFormColours] = useState<string[]>([""]);
-  const [formDescs, setFormDescs] = useState<string[]>([""]);
+  const [formProducts, setFormProducts] = useState<ProductEntry[]>([{ dept: "", category: "", colour: "", description: "" }]);
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
   const isAdmin = user?.isAdmin === true;
@@ -326,36 +331,48 @@ export default function SetupStoreLayout() {
       };
 
       setPendingRect(newPending);
-      setFormDept("");
-      setFormCats([""]);
-      setFormColours([""]);
-      setFormDescs([""]);
+      setFormProducts([{ dept: "", category: "", colour: "", description: "" }]);
       setShowForm(true);
     },
     [isDrawMode, rails, pendingRect, showForm],
   );
 
+  function updateProduct(i: number, field: keyof ProductEntry, value: string) {
+    setFormProducts((prev) => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+  }
+
+  function addProduct() {
+    setFormProducts((prev) => [...prev, { dept: "", category: "", colour: "", description: "" }]);
+  }
+
+  function removeProduct(i: number) {
+    setFormProducts((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   // ── Form save: generate Rail ID and add rail ───────────────────────
   function handleFormSave() {
-    if (!formDept.trim()) { alert("Please enter a product department."); return; }
-    const filledCats = formCats.map((c) => c.trim()).filter(Boolean);
-    if (filledCats.length === 0) { alert("Please enter at least one product category."); return; }
-    const filledColours = formColours.map((c) => c.trim()).filter(Boolean);
-    if (filledColours.length === 0) { alert("Please enter at least one colour."); return; }
-    const filledDescs = formDescs.map((d) => d.trim()).filter(Boolean);
+    for (let i = 0; i < formProducts.length; i++) {
+      const p = formProducts[i];
+      const label = formProducts.length > 1 ? ` (Product ${i + 1})` : "";
+      if (!p.dept.trim()) { alert(`Please enter a product department${label}.`); return; }
+      if (!p.category.trim()) { alert(`Please enter a product category${label}.`); return; }
+      if (!p.colour.trim()) { alert(`Please enter a colour${label}.`); return; }
+    }
     if (!pendingRect) return;
 
-    const newId = generateRailId(formDept, filledCats[0], filledColours[0], rails);
+    const first = formProducts[0];
+    const newId = generateRailId(first.dept, first.category, first.colour, rails);
     const newRail: Rail = {
       id: newId,
       x: pendingRect.x,
       y: pendingRect.y,
       w: pendingRect.w,
       h: pendingRect.h,
-      department: formDept.trim(),
-      category: filledCats.join(", "),
-      colour: filledColours.join(", "),
-      description: filledDescs.join(", "),
+      department: formProducts.map((p) => p.dept.trim()).join(" / "),
+      category: formProducts.map((p) => p.category.trim()).join(" / "),
+      colour: formProducts.map((p) => p.colour.trim()).join(" / "),
+      description: formProducts.map((p) => p.description.trim()).filter(Boolean).join(" / "),
+      products: formProducts.map((p) => ({ dept: p.dept.trim(), category: p.category.trim(), colour: p.colour.trim(), description: p.description.trim() })),
     };
 
     const updated = [...rails, newRail];
@@ -682,145 +699,101 @@ export default function SetupStoreLayout() {
               gap: "1.1rem",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#fff", borderBottom: "1px solid #333", paddingBottom: "0.75rem" }}>
-              Rail Details
-            </h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #333", paddingBottom: "0.75rem" }}>
+              <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#fff" }}>
+                Rail Details
+              </h2>
+            </div>
             <p style={{ margin: 0, fontSize: "0.82rem", color: "#999" }}>
-              Enter the details below. The Rail ID will be generated automatically when you save.
+              Fill in the details for each product on this rail. The Rail ID is generated from the first product when you save.
             </p>
 
-            <div>
-              <label style={labelStyle}>Product Department *</label>
-              <input
-                type="text"
-                value={formDept}
-                onChange={(e) => setFormDept(e.target.value)}
-                placeholder="e.g. Menswear"
-                style={inputStyle}
-                autoFocus
-              />
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>Product Category *</label>
-                <button
-                  type="button"
-                  onClick={() => setFormCats((prev) => [...prev, ""])}
-                  title="Add another category"
-                  style={{ background: "#333", border: "1px solid #555", color: "#fff", borderRadius: 6, width: 26, height: 26, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "55vh", overflowY: "auto", paddingRight: "0.25rem" }}>
+              {formProducts.map((p, i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: "#111",
+                    border: "1px solid #333",
+                    borderRadius: 10,
+                    padding: "1rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.75rem",
+                    position: "relative",
+                  }}
                 >
-                  +
-                </button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {formCats.map((c, i) => (
-                  <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    <input
-                      type="text"
-                      value={c}
-                      onChange={(e) => {
-                        const updated = [...formCats];
-                        updated[i] = e.target.value;
-                        setFormCats(updated);
-                      }}
-                      placeholder={i === 0 ? "e.g. Shirts" : "e.g. Trousers"}
-                      style={{ ...inputStyle, flex: 1 }}
-                    />
-                    {formCats.length > 1 && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      {formProducts.length > 1 ? `Product ${i + 1}` : "Product"}
+                    </span>
+                    {formProducts.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => setFormCats((prev) => prev.filter((_, idx) => idx !== i))}
-                        title="Remove this category"
-                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, width: 26, height: 26, fontSize: "1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                        onClick={() => removeProduct(i)}
+                        title="Remove this product"
+                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, padding: "0.2rem 0.55rem", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
                       >
-                        −
+                        Remove
                       </button>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>Colour *</label>
-                <button
-                  type="button"
-                  onClick={() => setFormColours((prev) => [...prev, ""])}
-                  title="Add another colour"
-                  style={{ background: "#333", border: "1px solid #555", color: "#fff", borderRadius: 6, width: 26, height: 26, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                >
-                  +
-                </button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {formColours.map((c, i) => (
-                  <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+
+                  <div>
+                    <label style={labelStyle}>Department *</label>
                     <input
                       type="text"
-                      value={c}
-                      onChange={(e) => {
-                        const updated = [...formColours];
-                        updated[i] = e.target.value;
-                        setFormColours(updated);
-                      }}
-                      placeholder={i === 0 ? "e.g. Navy" : "e.g. White"}
-                      style={{ ...inputStyle, flex: 1 }}
+                      value={p.dept}
+                      onChange={(e) => updateProduct(i, "dept", e.target.value)}
+                      placeholder="e.g. Menswear"
+                      style={inputStyle}
                       autoFocus={i === 0}
                     />
-                    {formColours.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setFormColours((prev) => prev.filter((_, idx) => idx !== i))}
-                        title="Remove this colour"
-                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, width: 26, height: 26, fontSize: "1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                      >
-                        −
-                      </button>
-                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>Short Description</label>
-                <button
-                  type="button"
-                  onClick={() => setFormDescs((prev) => [...prev, ""])}
-                  title="Add another description"
-                  style={{ background: "#333", border: "1px solid #555", color: "#fff", borderRadius: 6, width: 26, height: 26, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                >
-                  +
-                </button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {formDescs.map((d, i) => (
-                  <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+
+                  <div>
+                    <label style={labelStyle}>Category *</label>
                     <input
                       type="text"
-                      value={d}
-                      onChange={(e) => {
-                        const updated = [...formDescs];
-                        updated[i] = e.target.value;
-                        setFormDescs(updated);
-                      }}
-                      placeholder={i === 0 ? "e.g. Formal long-sleeve shirts" : "e.g. Casual slim-fit"}
-                      style={{ ...inputStyle, flex: 1 }}
+                      value={p.category}
+                      onChange={(e) => updateProduct(i, "category", e.target.value)}
+                      placeholder="e.g. Shirts"
+                      style={inputStyle}
                     />
-                    {formDescs.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setFormDescs((prev) => prev.filter((_, idx) => idx !== i))}
-                        title="Remove this description"
-                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, width: 26, height: 26, fontSize: "1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                      >
-                        −
-                      </button>
-                    )}
                   </div>
-                ))}
-              </div>
+
+                  <div>
+                    <label style={labelStyle}>Colour *</label>
+                    <input
+                      type="text"
+                      value={p.colour}
+                      onChange={(e) => updateProduct(i, "colour", e.target.value)}
+                      placeholder="e.g. Navy Blue"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Short Description</label>
+                    <input
+                      type="text"
+                      value={p.description}
+                      onChange={(e) => updateProduct(i, "description", e.target.value)}
+                      placeholder="e.g. Formal long-sleeve shirts"
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
+
+            <button
+              type="button"
+              onClick={addProduct}
+              style={{ background: "transparent", border: "1px dashed #555", color: "#ccc", borderRadius: 8, padding: "0.6rem 1rem", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", textAlign: "center" }}
+            >
+              + Add another product
+            </button>
 
             <div style={{ display: "flex", gap: "1rem", marginTop: "0.25rem" }}>
               <button
@@ -833,7 +806,6 @@ export default function SetupStoreLayout() {
               <button
                 type="button"
                 onClick={handleFormSave}
-                onKeyDown={(e) => { if (e.key === "Enter") handleFormSave(); }}
                 style={{ flex: 1, background: "#fff", color: "#111", border: "none", borderRadius: 8, padding: "0.7rem", fontSize: "0.97rem", fontWeight: 700, cursor: "pointer" }}
               >
                 Save &amp; Generate Rail ID
