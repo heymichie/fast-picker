@@ -186,12 +186,10 @@ export default function SetupStoreLayout() {
   const [formProducts, setFormProducts] = useState<ProductEntry[]>([{ dept: "", category: "", colour: "", description: "", productCode: "" }]);
   const [editingRailId, setEditingRailId] = useState<string | null>(null);
 
-  // Hover state for rail label tooltip
+  // Hover state (cursor only — no tooltip)
   const [hoveredRail, setHoveredRail] = useState<Rail | null>(null);
-  const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
-  const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAdmin = user?.isAdmin === true;
 
   // ── Canvas resize sync ─────────────────────────────────────────────
@@ -312,16 +310,13 @@ export default function SetupStoreLayout() {
         return;
       }
 
-      // Hover detection over rail labels (only when not drawing / no form open)
+      // Cursor-only hover detection over rail labels (no tooltip — double-click to edit)
       if (!isDrawMode && !showForm) {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const W = canvas.width;
         const H = canvas.height;
-        const LABEL_H = 23; // approx label height (fontSize 11 + padding*2)
-        const container = containerRef.current;
-        const containerRect = container?.getBoundingClientRect();
-
+        const LABEL_H = 23;
         let found: Rail | null = null;
         for (const rail of rails) {
           const rx = rail.x * W;
@@ -333,32 +328,33 @@ export default function SetupStoreLayout() {
           }
         }
         setHoveredRail(found);
-        if (found && containerRect) {
-          // Convert canvas coords back to container-relative px
-          const scaleX = canvas.width / canvas.getBoundingClientRect().width;
-          const scaleY = canvas.height / canvas.getBoundingClientRect().height;
-          setHoverPos({
-            x: (x / scaleX),
-            y: (y / scaleY),
-          });
-        }
       }
     },
     [isDrawMode, rails, pendingRect, showForm],
   );
 
-  const scheduleHoverClear = useCallback(() => {
-    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
-    hoverClearTimer.current = setTimeout(() => setHoveredRail(null), 150);
-  }, []);
-
-  const cancelHoverClear = useCallback(() => {
-    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    scheduleHoverClear();
-  }, [scheduleHoverClear]);
+  // Double-click on a rail label opens the edit form
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (isDrawMode || showForm) return;
+      const { x, y } = getCanvasPos(e);
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const W = canvas.width;
+      const H = canvas.height;
+      const LABEL_H = 23;
+      for (const rail of rails) {
+        const rx = rail.x * W;
+        const ry = rail.y * H;
+        const rw = rail.w * W;
+        if (x >= rx && x <= rx + rw && y >= ry && y <= ry + LABEL_H) {
+          handleEditRail(rail);
+          return;
+        }
+      }
+    },
+    [isDrawMode, showForm, rails],
+  );
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -713,60 +709,19 @@ export default function SetupStoreLayout() {
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
+            onDoubleClick={handleDoubleClick}
             onMouseLeave={(e) => {
-              handleMouseLeave();
+              setHoveredRail(null);
               if (drawingRef.current) handleMouseUp(e as React.MouseEvent<HTMLCanvasElement>);
             }}
           />
-
-          {/* Rail label hover tooltip */}
-          {hoveredRail && !showForm && !isDrawMode && (
-            <div
-              style={{
-                position: "absolute",
-                left: hoverPos.x + 8,
-                top: hoverPos.y + 28,
-                background: "#1a1a2e",
-                border: "1px solid #4a9eda",
-                borderRadius: 8,
-                padding: "0.5rem 0.75rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                pointerEvents: "auto",
-                zIndex: 100,
-                boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={cancelHoverClear}
-              onMouseLeave={scheduleHoverClear}
-            >
-              <span style={{ fontSize: "0.82rem", color: "#aad4f5", fontWeight: 600 }}>
-                {hoveredRail.id}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleEditRail(hoveredRail)}
-                style={{
-                  background: "#4a9eda",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "0.25rem 0.75rem",
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Edit
-              </button>
-            </div>
-          )}
         </div>
 
         {rails.length > 0 && (
           <p style={{ margin: "0.5rem 0 0", fontSize: "0.82rem", color: "#4a9eda" }}>
             {rails.length} rail{rails.length !== 1 ? "s" : ""} marked
+            {" · "}
+            <span style={{ color: "#666" }}>Double-click a Rail ID label to edit</span>
             {" · "}
             <button
               type="button"
@@ -956,7 +911,7 @@ export default function SetupStoreLayout() {
                 onClick={handleFormSave}
                 style={{ flex: 1, background: "#fff", color: "#111", border: "none", borderRadius: 8, padding: "0.7rem", fontSize: "0.97rem", fontWeight: 700, cursor: "pointer" }}
               >
-                Save &amp; Generate Rail ID
+                {editingRailId ? "Update and Save" : "Save & Generate Rail ID"}
               </button>
             </div>
           </div>
