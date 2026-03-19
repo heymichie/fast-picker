@@ -160,6 +160,67 @@ export default function ManageAccounts() {
     cancelEdit(username);
   }
 
+  // ── Print / Download helpers ───────────────────────────────────────
+  function printAccounts() {
+    const title = "Manage Accounts";
+    const thS = `text-align:left;padding:8px 10px;background:#2a2a2a;color:#fff;font-size:11px;border:1px solid #555;`;
+    const evenCell = `padding:8px 10px;border:1px solid #ccc;background:#f0f0f0;font-size:12px;vertical-align:top;`;
+    const oddCell  = `padding:8px 10px;border:1px solid #ccc;background:#e6e6e6;font-size:12px;vertical-align:top;`;
+    const rows = accounts.map((a, i) => {
+      const c = i % 2 === 0 ? evenCell : oddCell;
+      const status = a.isActive ? "Active" : "Inactive";
+      const statusC = a.isActive ? "" : "color:#cc0000;font-weight:600;";
+      return `<tr>
+        <td style="${c}">${a.username}</td>
+        <td style="${c}">${a.fullName}</td>
+        <td style="${c}">${a.employeeNumber ?? "—"}</td>
+        <td style="${c}">${a.department ?? "—"}</td>
+        <td style="${c}">${a.branchCode}</td>
+        <td style="${c}">${a.rights}</td>
+        <td style="${c}${statusC}">${status}</td>
+        <td style="${c}font-style:italic;">${formatCreated(a.createdBy, a.createdAt)}</td>
+      </tr>`;
+    }).join("");
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#fff;color:#222;}
+      h2{font-size:15px;color:#333;margin:0 0 6px;}p{font-size:11px;color:#888;margin:0 0 14px;}
+      table{width:100%;border-collapse:collapse;}
+      @media print{@page{margin:1.5cm;size:landscape;}body{padding:0;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>${accounts.length} account${accounts.length !== 1 ? "s" : ""} · Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      <table>
+        <thead><tr>
+          <th style="${thS}">Username</th><th style="${thS}">Full Name</th>
+          <th style="${thS}">Employee No.</th><th style="${thS}">Department</th>
+          <th style="${thS}">Branch</th><th style="${thS}">User Rights</th>
+          <th style="${thS}">Status</th><th style="${thS}">Created</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </body></html>`);
+    win.document.close(); win.focus(); setTimeout(() => win.print(), 600);
+  }
+
+  function downloadAccountsCSV() {
+    const headers = ["Username", "Full Name", "Employee Number", "Department", "Branch Code", "User Rights", "Status", "Created"];
+    const rows = accounts.map((a) => [
+      a.username, a.fullName, a.employeeNumber ?? "", a.department ?? "",
+      a.branchCode, a.rights, a.isActive ? "Active" : "Inactive",
+      formatCreated(a.createdBy, a.createdAt),
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Accounts_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Styles ─────────────────────────────────────────────────────────
   const headerCellStyle: React.CSSProperties = {
     padding: "10px 12px", border: "1px solid #888", background: "#2a2a2a",
@@ -201,6 +262,20 @@ export default function ManageAccounts() {
         </button>
         {" / Manage Account"}
       </div>
+
+      {/* Print / Download bar */}
+      {accounts.length > 0 && (
+        <div style={{ display: "flex", gap: "0.6rem", padding: "0 1.5rem 0.75rem", flexWrap: "wrap" }}>
+          <button type="button" onClick={printAccounts}
+            style={{ background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda", color: "#4a9eda", padding: "0.32rem 0.9rem", borderRadius: 7, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            🖨 Print
+          </button>
+          <button type="button" onClick={downloadAccountsCSV}
+            style={{ background: "rgba(74,158,218,0.08)", border: "1px solid #4a9eda", color: "#4a9eda", padding: "0.32rem 0.9rem", borderRadius: 7, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+            ⬇ Download CSV
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ flex: 1, padding: "0 1.5rem 2rem", overflowX: "auto" }}>
