@@ -32,8 +32,12 @@ const REPORT_TYPES = [
     options: ["Order Picking Duration", "Frequency of order picking"],
   },
   {
-    category: "Accounts Management",
-    options: ["Created", "Modified", "Inactive", "Deleted"],
+    category: "Order Picking Stats",
+    options: ["Order Picker", "Duration"],
+  },
+  {
+    category: "Performance Management",
+    options: ["Order Picker", "Day", "Time", "Duration"],
   },
 ];
 
