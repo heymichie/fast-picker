@@ -69,8 +69,8 @@ export default function Reports() {
       .then((r) => r.json())
       .then((data: string[]) => {
         if (isAdmin) {
-          // Administrators see all branches across all users
-          setBranches(data);
+          // Administrators see all branches plus an "ALL" option
+          setBranches(["ALL", ...data]);
         } else if (user?.branchCode && user.branchCode !== "ALL") {
           // Non-admins are limited to their own assigned branch
           const myBranch = user.branchCode;
@@ -182,7 +182,7 @@ export default function Reports() {
             >
               <option value="">Select branch code</option>
               {branches.map((b) => (
-                <option key={b} value={b}>{b}</option>
+                <option key={b} value={b}>{b === "ALL" ? "ALL (All Branches)" : b}</option>
               ))}
             </select>
           </div>
