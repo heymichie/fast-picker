@@ -39,7 +39,7 @@ async function findUniqueUsername(base: string): Promise<string> {
 
 router.post("/", async (req, res) => {
   try {
-    const { username, forenames, surname, employeeNumber, email, rights, branchCode, createdBy } = req.body;
+    const { username, forenames, surname, employeeNumber, email, department, rights, branchCode, createdBy } = req.body;
 
     if (!username || !forenames || !surname || !rights || !branchCode) {
       res.status(400).json({ error: "Missing required fields" });
@@ -66,6 +66,7 @@ router.post("/", async (req, res) => {
         surname,
         employeeNumber: employeeNumber || null,
         email: email || null,
+        department: department || null,
         rights,
         branchCode,
         passwordHash,
@@ -127,6 +128,7 @@ router.get("/all", async (_req, res) => {
         username: a.username,
         fullName: `${a.forenames} ${a.surname}`,
         employeeNumber: null as string | null,
+        department: null as string | null,
         branchCode: "ALL",
         rights: a.designation,
         isActive: a.isActive,
@@ -138,6 +140,7 @@ router.get("/all", async (_req, res) => {
         username: u.username,
         fullName: `${u.forenames} ${u.surname}`,
         employeeNumber: u.employeeNumber,
+        department: u.department ?? null,
         branchCode: u.branchCode,
         rights: u.rights,
         isActive: u.isActive,

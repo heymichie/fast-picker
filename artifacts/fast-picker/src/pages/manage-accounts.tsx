@@ -23,6 +23,7 @@ interface AccountRow {
   username: string;
   fullName: string;
   employeeNumber: string | null;
+  department: string | null;
   branchCode: string;
   rights: string;
   isActive: boolean;
@@ -150,19 +151,21 @@ export default function ManageAccounts() {
             }}
           >
             <colgroup>
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "14%" }} />
               <col style={{ width: "11%" }} />
-              <col style={{ width: "29%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "25%" }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={headerCellStyle}>Username</th>
                 <th style={headerCellStyle}>Full Name</th>
                 <th style={headerCellStyle}>Employee<br />Number</th>
+                <th style={headerCellStyle}>Department</th>
                 <th style={headerCellStyle}>Branch Code</th>
                 <th style={headerCellStyle}>User Rights</th>
                 <th style={headerCellStyle}>Account Status</th>
@@ -172,7 +175,7 @@ export default function ManageAccounts() {
             <tbody>
               {accounts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ ...cellStyle(0), textAlign: "center", padding: "2rem", color: "#666" }}>
+                  <td colSpan={8} style={{ ...cellStyle(0), textAlign: "center", padding: "2rem", color: "#666" }}>
                     No accounts found.
                   </td>
                 </tr>
@@ -182,6 +185,7 @@ export default function ManageAccounts() {
                     <td style={cellStyle(idx)}>{row.username}</td>
                     <td style={cellStyle(idx)}>{row.fullName}</td>
                     <td style={cellStyle(idx)}>{row.employeeNumber ?? "—"}</td>
+                    <td style={cellStyle(idx)}>{row.department ?? "—"}</td>
                     <td style={cellStyle(idx)}>{row.branchCode}</td>
                     <td style={cellStyle(idx)}>{row.rights}</td>
                     <td style={{ ...cellStyle(idx), color: row.isActive ? "#111" : "#cc0000", fontWeight: row.isActive ? 400 : 600 }}>
