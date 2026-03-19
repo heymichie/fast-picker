@@ -163,6 +163,8 @@ export default function SetupStoreLayout() {
 
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
+  const [floorName, setFloorName] = useState("Ground Floor");
+  const [existingFloors, setExistingFloors] = useState<string[]>([]);
   const [floorPlanSrc, setFloorPlanSrc] = useState<string | null>(null);
   const [rails, setRails] = useState<Rail[]>([]);
   const [isDrawMode, setIsDrawMode] = useState(false);
@@ -225,16 +227,33 @@ export default function SetupStoreLayout() {
       });
   }, []);
 
-  // ── Load saved layout when branch changes ──────────────────────────
+  // ── Fetch list of existing floors whenever branch changes ─────────
   useEffect(() => {
     if (!selectedBranch) {
+      setExistingFloors([]);
+      setFloorName("Ground Floor");
       setFloorPlanSrc(null);
       setRails([]);
       setPendingRect(null);
       setShowForm(false);
       return;
     }
-    fetch(`/api/store-layout?branchCode=${encodeURIComponent(selectedBranch)}`)
+    fetch(`/api/store-layout/floors?branchCode=${encodeURIComponent(selectedBranch)}`)
+      .then((r) => r.json())
+      .then((names: string[]) => setExistingFloors(names))
+      .catch(() => setExistingFloors([]));
+  }, [selectedBranch]);
+
+  // ── Load floor plan when branch + floorName are both set ──────────
+  useEffect(() => {
+    if (!selectedBranch || !floorName.trim()) {
+      setFloorPlanSrc(null);
+      setRails([]);
+      return;
+    }
+    fetch(
+      `/api/store-layout?branchCode=${encodeURIComponent(selectedBranch)}&floorName=${encodeURIComponent(floorName.trim())}`,
+    )
       .then((r) => r.json())
       .then((d) => {
         setFloorPlanSrc(d.floorPlanImage ?? null);
@@ -244,7 +263,7 @@ export default function SetupStoreLayout() {
         setFloorPlanSrc(null);
         setRails([]);
       });
-  }, [selectedBranch]);
+  }, [selectedBranch, floorName]);
 
   // ── Canvas interaction helpers ─────────────────────────────────────
   function getCanvasPos(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -381,15 +400,21 @@ export default function SetupStoreLayout() {
   async function handleSave() {
     if (!selectedBranch) { alert("Please select a branch code first."); return; }
     if (!floorPlanSrc) { alert("Please upload a floor plan image first."); return; }
+    if (!floorName.trim()) { alert("Please enter a floor plan name."); return; }
     setIsSaving(true);
     setSaveMsg("");
     try {
       const resp = await fetch("/api/store-layout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branchCode: selectedBranch, floorPlanImage: floorPlanSrc, railsData: rails }),
+        body: JSON.stringify({ branchCode: selectedBranch, floorName: floorName.trim(), floorPlanImage: floorPlanSrc, railsData: rails }),
       });
       if (!resp.ok) throw new Error();
+      // Refresh the existing floors list after saving
+      fetch(`/api/store-layout/floors?branchCode=${encodeURIComponent(selectedBranch)}`)
+        .then((r) => r.json())
+        .then((names: string[]) => setExistingFloors(names))
+        .catch(() => {});
       setSaveMsg("Floor plan and rail IDs saved successfully.");
     } catch {
       setSaveMsg("Save failed. Please try again.");
@@ -486,7 +511,7 @@ export default function SetupStoreLayout() {
           </div>
           <select
             value={selectedBranch}
-            onChange={(e) => { setSelectedBranch(e.target.value); setIsDrawMode(false); setPendingRect(null); setShowForm(false); }}
+            onChange={(e) => { setSelectedBranch(e.target.value); setFloorName("Ground Floor"); setIsDrawMode(false); setPendingRect(null); setShowForm(false); setSaveMsg(""); }}
             style={selectStyle}
             disabled={!isAdmin && branches.length <= 1}
           >
@@ -494,6 +519,56 @@ export default function SetupStoreLayout() {
             {branches.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
+      </div>
+
+      {/* ── Floor Plan Name row ──────────────────────────────────────── */}
+      <div style={{ padding: "0.5rem 1.5rem 0", maxWidth: 720 }}>
+        <div style={{ display: "flex", alignItems: "stretch" }}>
+          <div style={{ background: "#555", color: "#fff", fontWeight: 700, fontSize: "0.97rem", padding: "0.55rem 1rem", whiteSpace: "nowrap", minWidth: 140, display: "flex", alignItems: "center" }}>
+            Floor Plan Name
+          </div>
+          <input
+            type="text"
+            value={floorName}
+            onChange={(e) => { setFloorName(e.target.value); setIsDrawMode(false); setSaveMsg(""); }}
+            placeholder="e.g. Ground Floor"
+            style={{
+              flex: 1,
+              background: "#d4d4d4",
+              border: "none",
+              padding: "0.5rem 0.85rem",
+              fontSize: "0.97rem",
+              color: "#222",
+              outline: "none",
+              minWidth: 0,
+            }}
+          />
+        </div>
+        {/* Existing floors for this branch as quick-select chips */}
+        {existingFloors.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.45rem" }}>
+            <span style={{ fontSize: "0.78rem", color: "#888", lineHeight: "1.8" }}>Saved floors:</span>
+            {existingFloors.map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => { setFloorName(f); setIsDrawMode(false); setSaveMsg(""); }}
+                style={{
+                  background: floorName === f ? "#4a9eda" : "#2a2a2a",
+                  color: floorName === f ? "#fff" : "#ccc",
+                  border: `1px solid ${floorName === f ? "#4a9eda" : "#444"}`,
+                  borderRadius: 20,
+                  padding: "0.15rem 0.7rem",
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                  lineHeight: "1.6",
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Draw mode hint ────────────────────────────────────────────── */}

@@ -1,20 +1,46 @@
 import { Router, type IRouter } from "express";
 import { db, storeLayoutsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/", async (req, res) => {
+// List all floor plan names for a given branch
+router.get("/floors", async (req, res) => {
   try {
     const { branchCode } = req.query;
     if (!branchCode) {
       res.status(400).json({ error: "branchCode is required" });
       return;
     }
+    const rows = await db
+      .select({ floorName: storeLayoutsTable.floorName })
+      .from(storeLayoutsTable)
+      .where(eq(storeLayoutsTable.branchCode, branchCode as string));
+
+    res.json(rows.map((r) => r.floorName));
+  } catch (err) {
+    console.error("Store layout /floors error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Fetch a specific floor plan
+router.get("/", async (req, res) => {
+  try {
+    const { branchCode, floorName } = req.query;
+    if (!branchCode || !floorName) {
+      res.status(400).json({ error: "branchCode and floorName are required" });
+      return;
+    }
     const [layout] = await db
       .select()
       .from(storeLayoutsTable)
-      .where(eq(storeLayoutsTable.branchCode, branchCode as string));
+      .where(
+        and(
+          eq(storeLayoutsTable.branchCode, branchCode as string),
+          eq(storeLayoutsTable.floorName, floorName as string),
+        ),
+      );
 
     res.json({
       floorPlanImage: layout?.floorPlanImage ?? null,
@@ -26,11 +52,12 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Save / update a floor plan
 router.post("/", async (req, res) => {
   try {
-    const { branchCode, floorPlanImage, railsData } = req.body;
-    if (!branchCode) {
-      res.status(400).json({ error: "branchCode is required" });
+    const { branchCode, floorName, floorPlanImage, railsData } = req.body;
+    if (!branchCode || !floorName) {
+      res.status(400).json({ error: "branchCode and floorName are required" });
       return;
     }
 
@@ -38,11 +65,12 @@ router.post("/", async (req, res) => {
       .insert(storeLayoutsTable)
       .values({
         branchCode,
+        floorName,
         floorPlanImage: floorPlanImage ?? null,
         railsData: railsData !== undefined ? JSON.stringify(railsData) : null,
       })
       .onConflictDoUpdate({
-        target: storeLayoutsTable.branchCode,
+        target: [storeLayoutsTable.branchCode, storeLayoutsTable.floorName],
         set: {
           floorPlanImage: floorPlanImage ?? null,
           railsData: railsData !== undefined ? JSON.stringify(railsData) : null,
