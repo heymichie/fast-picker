@@ -175,9 +175,9 @@ export default function SetupStoreLayout() {
   const [pendingRect, setPendingRect] = useState<PendingRect | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formDept, setFormDept] = useState("");
-  const [formCat, setFormCat] = useState("");
+  const [formCats, setFormCats] = useState<string[]>([""]);
   const [formColours, setFormColours] = useState<string[]>([""]);
-  const [formDesc, setFormDesc] = useState("");
+  const [formDescs, setFormDescs] = useState<string[]>([""]);
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
   const isAdmin = user?.isAdmin === true;
@@ -327,9 +327,9 @@ export default function SetupStoreLayout() {
 
       setPendingRect(newPending);
       setFormDept("");
-      setFormCat("");
+      setFormCats([""]);
       setFormColours([""]);
-      setFormDesc("");
+      setFormDescs([""]);
       setShowForm(true);
     },
     [isDrawMode, rails, pendingRect, showForm],
@@ -338,12 +338,14 @@ export default function SetupStoreLayout() {
   // ── Form save: generate Rail ID and add rail ───────────────────────
   function handleFormSave() {
     if (!formDept.trim()) { alert("Please enter a product department."); return; }
-    if (!formCat.trim()) { alert("Please enter a product category."); return; }
+    const filledCats = formCats.map((c) => c.trim()).filter(Boolean);
+    if (filledCats.length === 0) { alert("Please enter at least one product category."); return; }
     const filledColours = formColours.map((c) => c.trim()).filter(Boolean);
     if (filledColours.length === 0) { alert("Please enter at least one colour."); return; }
+    const filledDescs = formDescs.map((d) => d.trim()).filter(Boolean);
     if (!pendingRect) return;
 
-    const newId = generateRailId(formDept, formCat, filledColours[0], rails);
+    const newId = generateRailId(formDept, filledCats[0], filledColours[0], rails);
     const newRail: Rail = {
       id: newId,
       x: pendingRect.x,
@@ -351,9 +353,9 @@ export default function SetupStoreLayout() {
       w: pendingRect.w,
       h: pendingRect.h,
       department: formDept.trim(),
-      category: formCat.trim(),
+      category: filledCats.join(", "),
       colour: filledColours.join(", "),
-      description: formDesc.trim(),
+      description: filledDescs.join(", "),
     };
 
     const updated = [...rails, newRail];
@@ -699,14 +701,44 @@ export default function SetupStoreLayout() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Product Category *</label>
-              <input
-                type="text"
-                value={formCat}
-                onChange={(e) => setFormCat(e.target.value)}
-                placeholder="e.g. Shirts"
-                style={inputStyle}
-              />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Product Category *</label>
+                <button
+                  type="button"
+                  onClick={() => setFormCats((prev) => [...prev, ""])}
+                  title="Add another category"
+                  style={{ background: "#333", border: "1px solid #555", color: "#fff", borderRadius: 6, width: 26, height: 26, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  +
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {formCats.map((c, i) => (
+                  <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={c}
+                      onChange={(e) => {
+                        const updated = [...formCats];
+                        updated[i] = e.target.value;
+                        setFormCats(updated);
+                      }}
+                      placeholder={i === 0 ? "e.g. Shirts" : "e.g. Trousers"}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    {formCats.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormCats((prev) => prev.filter((_, idx) => idx !== i))}
+                        title="Remove this category"
+                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, width: 26, height: 26, fontSize: "1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      >
+                        −
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
@@ -750,14 +782,44 @@ export default function SetupStoreLayout() {
               </div>
             </div>
             <div>
-              <label style={labelStyle}>Short Description</label>
-              <input
-                type="text"
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="e.g. Formal long-sleeve shirts"
-                style={inputStyle}
-              />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Short Description</label>
+                <button
+                  type="button"
+                  onClick={() => setFormDescs((prev) => [...prev, ""])}
+                  title="Add another description"
+                  style={{ background: "#333", border: "1px solid #555", color: "#fff", borderRadius: 6, width: 26, height: 26, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  +
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {formDescs.map((d, i) => (
+                  <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={d}
+                      onChange={(e) => {
+                        const updated = [...formDescs];
+                        updated[i] = e.target.value;
+                        setFormDescs(updated);
+                      }}
+                      placeholder={i === 0 ? "e.g. Formal long-sleeve shirts" : "e.g. Casual slim-fit"}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    {formDescs.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormDescs((prev) => prev.filter((_, idx) => idx !== i))}
+                        title="Remove this description"
+                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, width: 26, height: 26, fontSize: "1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      >
+                        −
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: "1rem", marginTop: "0.25rem" }}>
