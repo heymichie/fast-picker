@@ -112,6 +112,8 @@ export default function ViewOrders() {
   const canReassign = isAdmin
     || user?.designation === "Store Manager"
     || user?.designation === "Store Supervisor";
+  const canPickOrder = user?.designation === "Store Manager"
+    || user?.designation === "Store Supervisor";
 
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("ALL");
@@ -122,6 +124,32 @@ export default function ViewOrders() {
 
   // Modal state
   const [detailOrder, setDetailOrder] = useState<string | null>(null);
+
+  // Pick Order (manager/supervisor self-assign + start picking)
+  const [pickingOrder, setPickingOrder] = useState<string | null>(null);
+
+  async function handlePickOrder(orderNumber: string) {
+    if (!user) return;
+    setPickingOrder(orderNumber);
+    try {
+      const pickerName = `${user.forenames} ${user.surname}`;
+      await fetch(`/api/orders/${orderNumber}/reassign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pickerId: user.username, pickerName }),
+      });
+      await fetch(`/api/orders/${orderNumber}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "picking" }),
+      });
+      setLocation("/pick-orders");
+    } catch {
+      alert("Failed to start picking. Please try again.");
+    } finally {
+      setPickingOrder(null);
+    }
+  }
 
   function buildParams(statusOverride?: string) {
     const params = new URLSearchParams();
@@ -387,19 +415,39 @@ export default function ViewOrders() {
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a" }}>{fmt(o.dispatchedAt)}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a", fontWeight: 600 }}>{totalDur}</td>
                       {canReassign && (
-                        <td style={tdBase}>
+                        <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
                           {o.status === "received" && (
-                            <button
-                              type="button"
-                              onClick={() => setDetailOrder(o.orderNumber)}
-                              style={{
-                                background: "#1a1a2a", border: "1px solid #3a3a6a",
-                                color: "#88aaff", padding: "0.28rem 0.7rem", borderRadius: 6,
-                                fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                              }}
-                            >
-                              Reassign
-                            </button>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                              <button
+                                type="button"
+                                onClick={() => setDetailOrder(o.orderNumber)}
+                                style={{
+                                  background: "#1a1a2a", border: "1px solid #3a3a6a",
+                                  color: "#88aaff", padding: "0.28rem 0.7rem", borderRadius: 6,
+                                  fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                                }}
+                              >
+                                Reassign
+                              </button>
+                              {canPickOrder && (
+                                <button
+                                  type="button"
+                                  disabled={pickingOrder === o.orderNumber}
+                                  onClick={() => handlePickOrder(o.orderNumber)}
+                                  style={{
+                                    background: pickingOrder === o.orderNumber ? "#1a2a1a" : "#162a16",
+                                    border: "1px solid #3a6a3a",
+                                    color: pickingOrder === o.orderNumber ? "#557755" : "#50d278",
+                                    padding: "0.28rem 0.7rem", borderRadius: 6,
+                                    fontSize: "0.76rem", fontWeight: 700,
+                                    cursor: pickingOrder === o.orderNumber ? "not-allowed" : "pointer",
+                                    whiteSpace: "nowrap", opacity: pickingOrder === o.orderNumber ? 0.6 : 1,
+                                  }}
+                                >
+                                  {pickingOrder === o.orderNumber ? "Starting…" : "Pick Order"}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </td>
                       )}
