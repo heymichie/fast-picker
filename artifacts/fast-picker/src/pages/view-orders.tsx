@@ -165,8 +165,11 @@ export default function ViewOrders() {
     }
   }
 
-  // Modal state
-  const [detailOrder, setDetailOrder] = useState<string | null>(null);
+  // Modal state — supports ?order=ORD-xxx URL param to auto-open
+  const [detailOrder, setDetailOrder] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("order");
+  });
 
   // Pick Order (manager/supervisor self-assign + start picking)
   const [pickingOrder, setPickingOrder] = useState<string | null>(null);
