@@ -174,7 +174,7 @@ export default function SetupStoreLayout() {
   const [showForm, setShowForm] = useState(false);
   const [formDept, setFormDept] = useState("");
   const [formCat, setFormCat] = useState("");
-  const [formColour, setFormColour] = useState("");
+  const [formColours, setFormColours] = useState<string[]>([""]);
   const [formDesc, setFormDesc] = useState("");
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
@@ -309,7 +309,7 @@ export default function SetupStoreLayout() {
       setPendingRect(newPending);
       setFormDept("");
       setFormCat("");
-      setFormColour("");
+      setFormColours([""]);
       setFormDesc("");
       setShowForm(true);
     },
@@ -320,10 +320,11 @@ export default function SetupStoreLayout() {
   function handleFormSave() {
     if (!formDept.trim()) { alert("Please enter a product department."); return; }
     if (!formCat.trim()) { alert("Please enter a product category."); return; }
-    if (!formColour.trim()) { alert("Please enter a colour."); return; }
+    const filledColours = formColours.map((c) => c.trim()).filter(Boolean);
+    if (filledColours.length === 0) { alert("Please enter at least one colour."); return; }
     if (!pendingRect) return;
 
-    const newId = generateRailId(formDept, formCat, formColour, rails);
+    const newId = generateRailId(formDept, formCat, filledColours[0], rails);
     const newRail: Rail = {
       id: newId,
       x: pendingRect.x,
@@ -332,7 +333,7 @@ export default function SetupStoreLayout() {
       h: pendingRect.h,
       department: formDept.trim(),
       category: formCat.trim(),
-      colour: formColour.trim(),
+      colour: filledColours.join(", "),
       description: formDesc.trim(),
     };
 
@@ -633,14 +634,45 @@ export default function SetupStoreLayout() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Colour *</label>
-              <input
-                type="text"
-                value={formColour}
-                onChange={(e) => setFormColour(e.target.value)}
-                placeholder="e.g. Blue"
-                style={inputStyle}
-              />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.3rem" }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Colour *</label>
+                <button
+                  type="button"
+                  onClick={() => setFormColours((prev) => [...prev, ""])}
+                  title="Add another colour"
+                  style={{ background: "#333", border: "1px solid #555", color: "#fff", borderRadius: 6, width: 26, height: 26, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  +
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {formColours.map((c, i) => (
+                  <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={c}
+                      onChange={(e) => {
+                        const updated = [...formColours];
+                        updated[i] = e.target.value;
+                        setFormColours(updated);
+                      }}
+                      placeholder={i === 0 ? "e.g. Navy" : "e.g. White"}
+                      style={{ ...inputStyle, flex: 1 }}
+                      autoFocus={i === 0}
+                    />
+                    {formColours.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormColours((prev) => prev.filter((_, idx) => idx !== i))}
+                        title="Remove this colour"
+                        style={{ background: "#3a1a1a", border: "1px solid #662222", color: "#ff7070", borderRadius: 6, width: 26, height: 26, fontSize: "1rem", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      >
+                        −
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div>
               <label style={labelStyle}>Short Description</label>
