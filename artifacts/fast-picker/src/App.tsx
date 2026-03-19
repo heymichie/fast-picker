@@ -14,6 +14,7 @@ import UserRights from "@/pages/user-rights";
 import ManageAccounts from "@/pages/manage-accounts";
 import PickOrders from "@/pages/pick-orders";
 import ManageStoreLayout from "@/pages/manage-store-layout";
+import Reports from "@/pages/reports";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/manage-accounts" component={ManageAccounts} />
       <Route path="/pick-orders" component={PickOrders} />
       <Route path="/manage-store-layout" component={ManageStoreLayout} />
+      <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
   );

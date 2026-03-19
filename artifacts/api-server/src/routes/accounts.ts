@@ -107,6 +107,16 @@ router.get("/", async (_req, res) => {
   }
 });
 
+router.get("/branches", async (_req, res) => {
+  try {
+    const users = await db.select({ branchCode: usersTable.branchCode }).from(usersTable);
+    const codes = [...new Set(users.map((u) => u.branchCode).filter((c) => c && c !== "ALL"))].sort();
+    res.json(codes);
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/all", async (_req, res) => {
   try {
     const users = await db.select().from(usersTable);
