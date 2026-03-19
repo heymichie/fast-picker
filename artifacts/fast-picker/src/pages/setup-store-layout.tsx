@@ -186,8 +186,9 @@ export default function SetupStoreLayout() {
   const [formProducts, setFormProducts] = useState<ProductEntry[]>([{ dept: "", category: "", colour: "", description: "", productCode: "" }]);
   const [editingRailId, setEditingRailId] = useState<string | null>(null);
 
-  // Hover state (cursor only — no tooltip)
+  // Hover state for cursor change + "Double-click to edit" label
   const [hoveredRail, setHoveredRail] = useState<Rail | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
   const isAdmin = user?.isAdmin === true;
@@ -310,13 +311,14 @@ export default function SetupStoreLayout() {
         return;
       }
 
-      // Cursor-only hover detection over rail labels (no tooltip — double-click to edit)
+      // Hover detection over rail labels — shows "Double-click to edit" label near cursor
       if (!isDrawMode && !showForm) {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const W = canvas.width;
         const H = canvas.height;
         const LABEL_H = 23;
+        const canvasRect = canvas.getBoundingClientRect();
         let found: Rail | null = null;
         for (const rail of rails) {
           const rx = rail.x * W;
@@ -328,6 +330,16 @@ export default function SetupStoreLayout() {
           }
         }
         setHoveredRail(found);
+        if (found) {
+          // Container-relative position so the overlay div can be positioned absolutely
+          const containerRect = containerRef.current?.getBoundingClientRect();
+          if (containerRect) {
+            setHoverPos({
+              x: e.clientX - containerRect.left,
+              y: e.clientY - containerRect.top,
+            });
+          }
+        }
       }
     },
     [isDrawMode, rails, pendingRect, showForm],
@@ -715,6 +727,30 @@ export default function SetupStoreLayout() {
               if (drawingRef.current) handleMouseUp(e as React.MouseEvent<HTMLCanvasElement>);
             }}
           />
+
+          {/* "Double-click to edit" cursor label */}
+          {hoveredRail && !showForm && !isDrawMode && (
+            <div
+              style={{
+                position: "absolute",
+                left: hoverPos.x + 14,
+                top: hoverPos.y + 18,
+                background: "rgba(20,30,48,0.92)",
+                border: "1px solid #4a9eda",
+                borderRadius: 5,
+                padding: "0.18rem 0.55rem",
+                fontSize: "0.74rem",
+                color: "#aad4f5",
+                fontWeight: 600,
+                pointerEvents: "none",
+                whiteSpace: "nowrap",
+                zIndex: 100,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+              }}
+            >
+              Double-click to edit
+            </div>
+          )}
         </div>
 
         {rails.length > 0 && (
