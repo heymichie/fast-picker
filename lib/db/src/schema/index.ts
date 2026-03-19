@@ -20,3 +20,4 @@
 export * from "./adminSetup";
 export * from "./users";
 export * from "./userRights";
+export * from "./storeLayout";
