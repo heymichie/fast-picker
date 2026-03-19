@@ -25,6 +25,17 @@ interface Rail {
   y: number;
   w: number;
   h: number;
+  department: string;
+  category: string;
+  colour: string;
+  description: string;
+}
+
+interface PendingRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 const selectStyle: React.CSSProperties = {
@@ -44,6 +55,7 @@ const selectStyle: React.CSSProperties = {
   width: "100%",
 };
 
+// ── Canvas drawing helpers ─────────────────────────────────────────────
 function drawLabel(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw: number, railId: string) {
   const boldPart = "Rail ID: ";
   const idPart = railId;
@@ -57,7 +69,6 @@ function drawLabel(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw: nu
   const idW = ctx.measureText(idPart).width;
 
   const labelW = Math.min(boldW + idW + padding * 2, Math.max(rw, 60));
-
   const lx = rx;
   const ly = ry;
 
@@ -68,11 +79,9 @@ function drawLabel(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw: nu
   ctx.strokeRect(lx, ly, labelW, labelH);
 
   const textY = ly + padding + fontSize - 2;
-
   ctx.fillStyle = "#1a2a3a";
   ctx.font = `bold ${fontSize}px Arial, sans-serif`;
   ctx.fillText(boldPart, lx + padding, textY);
-
   ctx.font = `italic ${fontSize}px Arial, sans-serif`;
   ctx.fillText(idPart, lx + padding + boldW, textY);
 }
@@ -81,11 +90,11 @@ function redrawCanvas(
   canvas: HTMLCanvasElement,
   rails: Rail[],
   drawing: { sx: number; sy: number; cx: number; cy: number } | null,
+  pending: PendingRect | null,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   const W = canvas.width;
   const H = canvas.height;
 
@@ -101,16 +110,30 @@ function redrawCanvas(
     ctx.lineWidth = 2;
     ctx.setLineDash([]);
     ctx.strokeRect(rx, ry, rw, rh);
-
     drawLabel(ctx, rx, ry, rw, rail.id);
   }
 
+  // Pending rect (awaiting form input) shown with orange dashes
+  if (pending) {
+    const rx = pending.x * W;
+    const ry = pending.y * H;
+    const rw = pending.w * W;
+    const rh = pending.h * H;
+    ctx.fillStyle = "rgba(255, 180, 50, 0.10)";
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = "#f0a020";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.setLineDash([]);
+  }
+
+  // Live drawing preview (blue dashes while dragging)
   if (drawing) {
     const rx = Math.min(drawing.sx, drawing.cx);
     const ry = Math.min(drawing.sy, drawing.cy);
     const rw = Math.abs(drawing.cx - drawing.sx);
     const rh = Math.abs(drawing.cy - drawing.sy);
-
     ctx.fillStyle = "rgba(74, 158, 218, 0.10)";
     ctx.fillRect(rx, ry, rw, rh);
     ctx.strokeStyle = "#4a9eda";
@@ -121,6 +144,16 @@ function redrawCanvas(
   }
 }
 
+// ── Rail ID generator ──────────────────────────────────────────────────
+function generateRailId(dept: string, cat: string, colour: string, existing: Rail[]) {
+  const code = (s: string) =>
+    s.trim().replace(/\s+/g, "").slice(0, 3).toUpperCase() || "XXX";
+  const prefix = `${code(dept)}-${code(cat)}-${code(colour)}`;
+  const samePrefix = existing.filter((r) => r.id.startsWith(prefix + "-")).length;
+  return `${prefix}-${String(samePrefix + 1).padStart(3, "0")}`;
+}
+
+// ── Component ──────────────────────────────────────────────────────────
 export default function SetupStoreLayout() {
   const [, setLocation] = useLocation();
   const user = getStoredUser();
@@ -136,23 +169,18 @@ export default function SetupStoreLayout() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
+  // Pending rect waiting for form input
+  const [pendingRect, setPendingRect] = useState<PendingRect | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formDept, setFormDept] = useState("");
+  const [formCat, setFormCat] = useState("");
+  const [formColour, setFormColour] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
-  const railCountRef = useRef(0);
   const isAdmin = user?.isAdmin === true;
 
-  function nextRailId(existingRails: Rail[]) {
-    const used = new Set(existingRails.map((r) => r.id));
-    let n = existingRails.length + 1;
-    let candidate = `RL-${String(n).padStart(3, "0")}`;
-    while (used.has(candidate)) {
-      n += 1;
-      candidate = `RL-${String(n).padStart(3, "0")}`;
-    }
-    railCountRef.current = n;
-    return candidate;
-  }
-
-  // Sync canvas size to its container
+  // ── Canvas resize sync ─────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -163,20 +191,20 @@ export default function SetupStoreLayout() {
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
     }
-
     syncSize();
     const ro = new ResizeObserver(syncSize);
     ro.observe(container);
     return () => ro.disconnect();
   }, []);
 
-  // Redraw whenever rails or isDrawMode changes
+  // ── Redraw on state changes ────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    redrawCanvas(canvas, rails, drawingRef.current);
-  }, [rails, isDrawMode]);
+    redrawCanvas(canvas, rails, drawingRef.current, pendingRect);
+  }, [rails, isDrawMode, pendingRect]);
 
+  // ── Load branches ──────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/accounts/branches")
       .then((r) => r.json())
@@ -197,30 +225,28 @@ export default function SetupStoreLayout() {
       });
   }, []);
 
-  // Load saved floor plan + rails when branch changes
+  // ── Load saved layout when branch changes ──────────────────────────
   useEffect(() => {
     if (!selectedBranch) {
       setFloorPlanSrc(null);
       setRails([]);
-      railCountRef.current = 0;
+      setPendingRect(null);
+      setShowForm(false);
       return;
     }
     fetch(`/api/store-layout?branchCode=${encodeURIComponent(selectedBranch)}`)
       .then((r) => r.json())
       .then((d) => {
         setFloorPlanSrc(d.floorPlanImage ?? null);
-        const loaded: Rail[] = Array.isArray(d.railsData) ? d.railsData : [];
-        setRails(loaded);
-        railCountRef.current = loaded.length;
+        setRails(Array.isArray(d.railsData) ? d.railsData : []);
       })
       .catch(() => {
         setFloorPlanSrc(null);
         setRails([]);
-        railCountRef.current = 0;
       });
   }, [selectedBranch]);
 
-  // ── Canvas mouse handlers ──────────────────────────────────────────
+  // ── Canvas interaction helpers ─────────────────────────────────────
   function getCanvasPos(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -235,27 +261,27 @@ export default function SetupStoreLayout() {
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawMode) return;
+      if (!isDrawMode || showForm) return;
       const { x, y } = getCanvasPos(e);
       drawingRef.current = { sx: x, sy: y, cx: x, cy: y };
     },
-    [isDrawMode],
+    [isDrawMode, showForm],
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawMode || !drawingRef.current) return;
+      if (!isDrawMode || !drawingRef.current || showForm) return;
       const { x, y } = getCanvasPos(e);
       drawingRef.current = { ...drawingRef.current, cx: x, cy: y };
       const canvas = canvasRef.current;
-      if (canvas) redrawCanvas(canvas, rails, drawingRef.current);
+      if (canvas) redrawCanvas(canvas, rails, drawingRef.current, pendingRect);
     },
-    [isDrawMode, rails],
+    [isDrawMode, rails, pendingRect, showForm],
   );
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawMode || !drawingRef.current) return;
+      if (!isDrawMode || !drawingRef.current || showForm) return;
       const { x, y } = getCanvasPos(e);
       const d = drawingRef.current;
       drawingRef.current = null;
@@ -269,26 +295,63 @@ export default function SetupStoreLayout() {
       const rh = Math.abs(y - d.sy);
 
       if (rw < 10 || rh < 10) {
-        redrawCanvas(canvas, rails, null);
+        redrawCanvas(canvas, rails, null, pendingRect);
         return;
       }
 
-      const newRail: Rail = {
-        id: nextRailId(rails),
+      const newPending: PendingRect = {
         x: Math.min(d.sx, x) / W,
         y: Math.min(d.sy, y) / H,
         w: rw / W,
         h: rh / H,
       };
 
-      setRails((prev) => {
-        const updated = [...prev, newRail];
-        redrawCanvas(canvas, updated, null);
-        return updated;
-      });
+      setPendingRect(newPending);
+      setFormDept("");
+      setFormCat("");
+      setFormColour("");
+      setFormDesc("");
+      setShowForm(true);
     },
-    [isDrawMode, rails],
+    [isDrawMode, rails, pendingRect, showForm],
   );
+
+  // ── Form save: generate Rail ID and add rail ───────────────────────
+  function handleFormSave() {
+    if (!formDept.trim()) { alert("Please enter a product department."); return; }
+    if (!formCat.trim()) { alert("Please enter a product category."); return; }
+    if (!formColour.trim()) { alert("Please enter a colour."); return; }
+    if (!pendingRect) return;
+
+    const newId = generateRailId(formDept, formCat, formColour, rails);
+    const newRail: Rail = {
+      id: newId,
+      x: pendingRect.x,
+      y: pendingRect.y,
+      w: pendingRect.w,
+      h: pendingRect.h,
+      department: formDept.trim(),
+      category: formCat.trim(),
+      colour: formColour.trim(),
+      description: formDesc.trim(),
+    };
+
+    const updated = [...rails, newRail];
+    setRails(updated);
+    setPendingRect(null);
+    setShowForm(false);
+
+    const canvas = canvasRef.current;
+    if (canvas) redrawCanvas(canvas, updated, null, null);
+  }
+
+  function handleFormCancel() {
+    setPendingRect(null);
+    setShowForm(false);
+    drawingRef.current = null;
+    const canvas = canvasRef.current;
+    if (canvas) redrawCanvas(canvas, rails, null, null);
+  }
 
   // ── File upload ────────────────────────────────────────────────────
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -313,7 +376,7 @@ export default function SetupStoreLayout() {
     e.target.value = "";
   }
 
-  // ── Save ───────────────────────────────────────────────────────────
+  // ── Save to DB ─────────────────────────────────────────────────────
   async function handleSave() {
     if (!selectedBranch) { alert("Please select a branch code first."); return; }
     if (!floorPlanSrc) { alert("Please upload a floor plan image first."); return; }
@@ -325,7 +388,7 @@ export default function SetupStoreLayout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ branchCode: selectedBranch, floorPlanImage: floorPlanSrc, railsData: rails }),
       });
-      if (!resp.ok) throw new Error("Save failed");
+      if (!resp.ok) throw new Error();
       setSaveMsg("Floor plan and rail IDs saved successfully.");
     } catch {
       setSaveMsg("Save failed. Please try again.");
@@ -353,24 +416,39 @@ export default function SetupStoreLayout() {
     cursor: "pointer",
     flex: 1,
     minWidth: 160,
-    transition: "background 0.15s, color 0.15s",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "#2a2a2a",
+    border: "1px solid #444",
+    borderRadius: 6,
+    color: "#fff",
+    padding: "0.5rem 0.75rem",
+    fontSize: "0.95rem",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "0.85rem",
+    color: "#bbb",
+    marginBottom: "0.3rem",
+    display: "block",
+    fontWeight: 600,
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", color: "#fff" }}>
 
-      {/* Header */}
+      {/* ── Header ───────────────────────────────────────────────────── */}
       <header style={{ display: "flex", alignItems: "center", padding: "0.75rem 1.5rem", gap: "1rem" }}>
         <button
           onClick={() => setLocation("/dashboard")}
           style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
           title="Go to Dashboard"
         >
-          <img
-            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
-            alt="Fast Picker"
-            style={{ height: 56, objectFit: "contain" }}
-          />
+          <img src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`} alt="Fast Picker" style={{ height: 56, objectFit: "contain" }} />
         </button>
         <h1 style={{ fontSize: "2.2rem", fontWeight: 700, color: "#fff", margin: 0, flex: 1, lineHeight: 1 }}>
           Account: {user ? `${user.forenames} ${user.surname}` : "User"}
@@ -387,7 +465,7 @@ export default function SetupStoreLayout() {
         </div>
       </header>
 
-      {/* Breadcrumb */}
+      {/* ── Breadcrumb ───────────────────────────────────────────────── */}
       <div style={{ padding: "0.25rem 1.5rem 0.75rem", fontSize: "0.82rem", color: "#bbb" }}>
         <button
           type="button"
@@ -399,7 +477,7 @@ export default function SetupStoreLayout() {
         {"/Setup Shop Layout"}
       </div>
 
-      {/* Branch Code row */}
+      {/* ── Branch Code ──────────────────────────────────────────────── */}
       <div style={{ padding: "0 1.5rem", maxWidth: 720 }}>
         <div style={{ display: "flex", alignItems: "stretch" }}>
           <div style={{ background: "#555", color: "#fff", fontWeight: 700, fontSize: "0.97rem", padding: "0.55rem 1rem", whiteSpace: "nowrap", minWidth: 140, display: "flex", alignItems: "center" }}>
@@ -407,7 +485,7 @@ export default function SetupStoreLayout() {
           </div>
           <select
             value={selectedBranch}
-            onChange={(e) => { setSelectedBranch(e.target.value); setIsDrawMode(false); }}
+            onChange={(e) => { setSelectedBranch(e.target.value); setIsDrawMode(false); setPendingRect(null); setShowForm(false); }}
             style={selectStyle}
             disabled={!isAdmin && branches.length <= 1}
           >
@@ -417,25 +495,21 @@ export default function SetupStoreLayout() {
         </div>
       </div>
 
-      {/* Draw mode hint */}
-      {isDrawMode && (
+      {/* ── Draw mode hint ────────────────────────────────────────────── */}
+      {isDrawMode && !showForm && (
         <div style={{ textAlign: "center", padding: "0.5rem 1.5rem 0", fontSize: "0.85rem", color: "#4a9eda", fontStyle: "italic" }}>
-          Draw mode active — click and drag on the floor plan to mark a rail section. Click "Setup Rail IDs" again to exit.
+          Draw mode active — click and drag on the floor plan to mark a rail section.
         </div>
       )}
 
-      {/* Floor plan area with canvas overlay */}
+      {/* ── Floor plan + canvas overlay ───────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1rem 1.5rem 0.5rem" }}>
         <div
           ref={containerRef}
           style={{ width: "min(620px, 92vw)", aspectRatio: "4/3", background: "#a0a0a0", position: "relative", overflow: "hidden" }}
         >
           {floorPlanSrc ? (
-            <img
-              src={floorPlanSrc}
-              alt="Floor plan"
-              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-            />
+            <img src={floorPlanSrc} alt="Floor plan" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <span style={{ color: "#fff", fontSize: "1.05rem", fontWeight: 500, textAlign: "center", padding: "1rem" }}>
@@ -443,8 +517,6 @@ export default function SetupStoreLayout() {
               </span>
             </div>
           )}
-
-          {/* Canvas overlay — always present, only interactive in draw mode */}
           <canvas
             ref={canvasRef}
             style={{
@@ -452,26 +524,23 @@ export default function SetupStoreLayout() {
               inset: 0,
               width: "100%",
               height: "100%",
-              cursor: isDrawMode ? "crosshair" : "default",
-              pointerEvents: isDrawMode ? "all" : "none",
+              cursor: isDrawMode && !showForm ? "crosshair" : "default",
+              pointerEvents: isDrawMode && !showForm ? "all" : "none",
             }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={(e) => {
-              if (drawingRef.current) handleMouseUp(e as React.MouseEvent<HTMLCanvasElement>);
-            }}
+            onMouseLeave={(e) => { if (drawingRef.current) handleMouseUp(e as React.MouseEvent<HTMLCanvasElement>); }}
           />
         </div>
 
-        {/* Rail count indicator */}
         {rails.length > 0 && (
           <p style={{ margin: "0.5rem 0 0", fontSize: "0.82rem", color: "#4a9eda" }}>
             {rails.length} rail{rails.length !== 1 ? "s" : ""} marked
             {" · "}
             <button
               type="button"
-              onClick={() => { setRails([]); railCountRef.current = 0; }}
+              onClick={() => { setRails([]); const c = canvasRef.current; if (c) redrawCanvas(c, [], null, null); }}
               style={{ background: "none", border: "none", color: "#ff7070", cursor: "pointer", fontSize: "0.82rem", padding: 0 }}
             >
               Clear all
@@ -486,10 +555,9 @@ export default function SetupStoreLayout() {
         )}
       </div>
 
-      {/* Hidden file input */}
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
 
-      {/* Action buttons */}
+      {/* ── Action buttons ────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: "1.5rem", padding: "1.25rem 1.5rem 2.5rem", justifyContent: "center", flexWrap: "wrap" }}>
         <button type="button" style={btnStyle} onClick={() => fileInputRef.current?.click()}>
           Upload Floor Plan
@@ -504,17 +572,107 @@ export default function SetupStoreLayout() {
         </button>
         <button
           type="button"
-          style={{
-            ...btnStyle,
-            background: isDrawMode ? "#4a9eda" : "#fff",
-            color: isDrawMode ? "#fff" : "#111",
-            outline: isDrawMode ? "2px solid #fff" : "none",
-          }}
+          style={{ ...btnStyle, background: isDrawMode ? "#4a9eda" : "#fff", color: isDrawMode ? "#fff" : "#111", outline: isDrawMode ? "2px solid #fff" : "none" }}
           onClick={toggleDrawMode}
         >
           {isDrawMode ? "Exit Rail Setup" : "Setup Rail IDs"}
         </button>
       </div>
+
+      {/* ── Rail detail popup form ─────────────────────────────────────── */}
+      {showForm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: "#1a1a1a",
+              border: "1px solid #444",
+              borderRadius: 12,
+              padding: "2rem",
+              width: "min(420px, 92vw)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.1rem",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#fff", borderBottom: "1px solid #333", paddingBottom: "0.75rem" }}>
+              Rail Details
+            </h2>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "#999" }}>
+              Enter the details below. The Rail ID will be generated automatically when you save.
+            </p>
+
+            <div>
+              <label style={labelStyle}>Product Department *</label>
+              <input
+                type="text"
+                value={formDept}
+                onChange={(e) => setFormDept(e.target.value)}
+                placeholder="e.g. Menswear"
+                style={inputStyle}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Product Category *</label>
+              <input
+                type="text"
+                value={formCat}
+                onChange={(e) => setFormCat(e.target.value)}
+                placeholder="e.g. Shirts"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Colour *</label>
+              <input
+                type="text"
+                value={formColour}
+                onChange={(e) => setFormColour(e.target.value)}
+                placeholder="e.g. Blue"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Short Description</label>
+              <input
+                type="text"
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                placeholder="e.g. Formal long-sleeve shirts"
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.25rem" }}>
+              <button
+                type="button"
+                onClick={handleFormCancel}
+                style={{ flex: 1, background: "#333", color: "#fff", border: "none", borderRadius: 8, padding: "0.7rem", fontSize: "0.97rem", fontWeight: 600, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleFormSave}
+                onKeyDown={(e) => { if (e.key === "Enter") handleFormSave(); }}
+                style={{ flex: 1, background: "#fff", color: "#111", border: "none", borderRadius: 8, padding: "0.7rem", fontSize: "0.97rem", fontWeight: 700, cursor: "pointer" }}
+              >
+                Save &amp; Generate Rail ID
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
