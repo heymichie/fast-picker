@@ -87,26 +87,36 @@ async function pickAssignee(
 
 // ── Seed data ─────────────────────────────────────────────────────────
 const SEED_DEPT_COUNTS: Record<string, Record<string, number>> = {
-  "ORD-20260319-001": { "02": 10, "12": 4 },   // dept 02 dominant
-  "ORD-20260319-002": { "12": 6,  "02": 2 },   // dept 12 dominant
-  "ORD-20260319-003": { "02": 15, "12": 7 },   // dept 02 dominant
-  "ORD-20260319-004": { "12": 8,  "02": 3 },   // dept 12 dominant
-  "ORD-20260319-005": { "02": 12, "12": 5 },   // dept 02 dominant
-  "ORD-20260319-006": { "12": 4,  "02": 2 },   // dept 12 dominant
-  "ORD-20260319-007": { "02": 7,  "12": 2 },   // dept 02 dominant
-  "ORD-20260319-008": { "12": 12, "02": 7 },   // dept 12 dominant
-  "ORD-20260319-009": { "02": 5,  "12": 2 },   // dept 02 dominant
-  "ORD-20260319-010": { "12": 9,  "02": 4 },   // dept 12 dominant
-  "ORD-20260319-011": { "02": 3,  "12": 1 },   // dept 02 dominant
-  "ORD-20260319-012": { "12": 15, "02": 6 },   // dept 12 dominant
-  "ORD-20260319-013": { "02": 10, "12": 5 },   // dept 02 dominant
-  "ORD-20260319-014": { "12": 7,  "02": 3 },   // dept 12 dominant
-  "ORD-20260319-015": { "02": 12, "12": 4 },   // dept 02 dominant
-  "ORD-20260319-016": { "12": 4,  "02": 1 },   // dept 12 dominant
-  "ORD-20260319-017": { "12": 8,  "02": 4 },   // dept 12 dominant
-  "ORD-20260319-018": { "02": 7,  "12": 2 },   // dept 02 dominant
-  "ORD-20260319-019": { "12": 14, "02": 6 },   // dept 12 dominant
-  "ORD-20260319-020": { "02": 2,  "12": 1 },   // dept 02 dominant
+  // JHB001
+  "ORD-20260319-001": { "02": 10, "12": 4 },
+  "ORD-20260319-002": { "12": 6,  "02": 2 },
+  "ORD-20260319-003": { "02": 15, "12": 7 },
+  "ORD-20260319-004": { "12": 8,  "02": 3 },
+  "ORD-20260319-005": { "02": 12, "12": 5 },
+  "ORD-20260319-006": { "12": 4,  "02": 2 },
+  "ORD-20260319-007": { "02": 7,  "12": 2 },
+  // CPT002
+  "ORD-20260319-008": { "12": 12, "02": 7 },
+  "ORD-20260319-009": { "02": 5,  "12": 2 },
+  "ORD-20260319-010": { "12": 9,  "02": 4 },
+  "ORD-20260319-011": { "02": 3,  "12": 1 },
+  "ORD-20260319-012": { "12": 15, "02": 6 },
+  // DUR003
+  "ORD-20260319-013": { "02": 10, "12": 5 },
+  "ORD-20260319-014": { "12": 7,  "02": 3 },
+  "ORD-20260319-015": { "02": 12, "12": 4 },
+  "ORD-20260319-016": { "12": 4,  "02": 1 },
+  // PTA004
+  "ORD-20260319-017": { "12": 8,  "02": 4 },
+  "ORD-20260319-018": { "02": 7,  "12": 2 },
+  "ORD-20260319-019": { "12": 14, "02": 6 },
+  "ORD-20260319-020": { "02": 2,  "12": 1 },
+  // Branch 501 — XavierB (dept 02) + PaulN (dept 12, ALL branches)
+  "ORD-20260319-021": { "02": 9,  "12": 3 },
+  "ORD-20260319-022": { "12": 11, "02": 4 },
+  "ORD-20260319-023": { "02": 14, "12": 5 },
+  "ORD-20260319-024": { "12": 6,  "02": 2 },
+  "ORD-20260319-025": { "02": 8,  "12": 1 },
 };
 
 async function seedIfEmpty() {
@@ -141,6 +151,12 @@ async function seedIfEmpty() {
     { no: "ORD-20260319-018", branch: "PTA004", status: "picked",     recv: 250, pStart: 243, pEnd: 221, disp: null, items: 9 },
     { no: "ORD-20260319-019", branch: "PTA004", status: "picking",    recv: 110, pStart: 103, pEnd: null, disp: null, items: 20 },
     { no: "ORD-20260319-020", branch: "PTA004", status: "received",   recv: 45,  pStart: null, pEnd: null, disp: null, items: 3 },
+    // Branch 501 — for XavierB (dept 02) and PaulN (dept 12, ALL branches)
+    { no: "ORD-20260319-021", branch: "501",    status: "dispatched", recv: 360, pStart: 352, pEnd: 330, disp: 320, items: 12 },
+    { no: "ORD-20260319-022", branch: "501",    status: "dispatched", recv: 300, pStart: 291, pEnd: 270, disp: 260, items: 15 },
+    { no: "ORD-20260319-023", branch: "501",    status: "picked",     recv: 180, pStart: 172, pEnd: 150, disp: null, items: 19 },
+    { no: "ORD-20260319-024", branch: "501",    status: "picking",    recv: 60,  pStart: 52,  pEnd: null, disp: null, items: 8 },
+    { no: "ORD-20260319-025", branch: "501",    status: "received",   recv: 15,  pStart: null, pEnd: null, disp: null, items: 9 },
   ];
 
   for (const s of seeds) {
