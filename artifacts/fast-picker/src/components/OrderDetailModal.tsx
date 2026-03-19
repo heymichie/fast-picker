@@ -45,6 +45,7 @@ interface ProductLine {
   category: string;
   colour: string;
   description: string;
+  size: string;
 }
 
 interface OrderDetail {
@@ -162,20 +163,31 @@ function drawLedCanvas(
       ctx.strokeRect(rx, ry, rw, rh);
       ctx.shadowBlur = 0;
 
-      // LED dots along the top of the rail (hanger heads)
+      // LED dots along the top of the rail (hanger heads) — one per product, labelled with size
       const prods = productsByRail[rail.id] ?? [];
-      const dotCount = Math.min(prods.length, 8);
+      const dotCount = Math.min(prods.length, 10);
       const spacing = rw / (dotCount + 1);
+      ctx.font = "bold 7px monospace";
       for (let di = 0; di < dotCount; di++) {
         const dotX = rx + spacing * (di + 1);
-        const dotY = ry + Math.max(rh * 0.18, 6);
+        const dotY = ry + Math.max(rh * 0.22, 8);
+        // Glowing dot
         ctx.beginPath();
-        ctx.arc(dotX, dotY, 4.5, 0, Math.PI * 2);
+        ctx.arc(dotX, dotY, 5.5, 0, Math.PI * 2);
         ctx.fillStyle = ledColour;
         ctx.shadowColor = ledColour;
         ctx.shadowBlur = 14 * pulse;
         ctx.fill();
         ctx.shadowBlur = 0;
+        // Size label below the dot
+        const sizeLabel = prods[di]?.size ?? "";
+        if (sizeLabel && rh > 28) {
+          const labelW = ctx.measureText(sizeLabel).width;
+          ctx.fillStyle = "rgba(0,0,0,0.75)";
+          ctx.fillRect(dotX - labelW / 2 - 2, dotY + 7, labelW + 4, 9);
+          ctx.fillStyle = ledColour;
+          ctx.fillText(sizeLabel, dotX - labelW / 2, dotY + 15);
+        }
       }
 
       // Rail ID label
@@ -324,6 +336,9 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
     if (!productsByRail[p.railId]) productsByRail[p.railId] = [];
     productsByRail[p.railId].push(p);
   }
+  // Lit dept codes (stripped of leading zeros) — for highlighting table rows
+  const litDepts = new Set(Array.from(litRailIds).map((rid) => rid.split("-")[0]?.replace(/^0+/, "") ?? ""));
+
   // For lit rails from layout, group by layout rail ID
   const productsByLayoutRail: Record<string, ProductLine[]> = {};
   if (layoutData) {
@@ -659,7 +674,7 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                     <thead>
                       <tr style={{ background: "#0a0a0a" }}>
-                        {["#", "Rail ID", "Product Code", "Dept", "Category", "Colour", "Description"].map((h) => (
+                        {["#", "Rail ID", "Product Code", "Dept", "Category", "Colour", "Size", "Description"].map((h) => (
                           <th key={h} style={{
                             padding: "0.55rem 0.75rem", textAlign: "left",
                             color: "#555", fontWeight: 700, fontSize: "0.7rem",
@@ -671,7 +686,10 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
                     </thead>
                     <tbody>
                       {order.products.map((p, i) => {
-                        const isLit = litRailIds.has(p.railId) && !!order.assignedPickerId;
+                        const productDeptNum = p.dept.replace(/^0+/, "");
+                        const isLit = !!order.assignedPickerId && (
+                          litRailIds.has(p.railId) || litDepts.has(productDeptNum)
+                        );
                         return (
                           <tr key={i} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)" }}>
                             <td style={{ padding: "0.55rem 0.75rem", color: "#444", fontSize: "0.75rem" }}>{i + 1}</td>
@@ -687,6 +705,21 @@ export function OrderDetailModal({ orderNumber, canReassign = false, onClose, on
                             <td style={{ padding: "0.55rem 0.75rem", color: "#888" }}>{p.dept}</td>
                             <td style={{ padding: "0.55rem 0.75rem", color: "#ddd" }}>{p.category}</td>
                             <td style={{ padding: "0.55rem 0.75rem", color: "#ddd" }}>{p.colour}</td>
+                            <td style={{ padding: "0.55rem 0.75rem" }}>
+                              <span style={{
+                                display: "inline-block",
+                                background: isLit ? ledColour + "22" : "#1a1a1a",
+                                border: `1px solid ${isLit ? ledColour + "66" : "#2a2a2a"}`,
+                                borderRadius: 4,
+                                padding: "0.1rem 0.45rem",
+                                fontFamily: "monospace",
+                                fontWeight: 700,
+                                fontSize: "0.78rem",
+                                color: isLit ? ledColour : "#aaa",
+                              }}>
+                                {p.size || "—"}
+                              </span>
+                            </td>
                             <td style={{ padding: "0.55rem 0.75rem", color: "#999" }}>{p.description}</td>
                           </tr>
                         );

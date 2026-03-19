@@ -13,7 +13,25 @@ interface ProductLine {
   category: string;
   colour: string;
   description: string;
+  size: string;
 }
+
+// Size sets keyed by category code
+const SIZE_SETS: Record<string, string[]> = {
+  // Ladies garments
+  TOP: ["XS", "S", "M", "L", "XL", "XXL"],
+  JNS: ["26", "28", "30", "32", "34", "36"],
+  DRS: ["6", "8", "10", "12", "14", "16"],
+  SKT: ["6", "8", "10", "12", "14", "16"],
+  JCK: ["XS", "S", "M", "L", "XL", "XXL"],
+  // Mens garments
+  SHT: ["S", "M", "L", "XL", "XXL", "3XL"],
+  TRS: ["28", "30", "32", "34", "36", "38"],
+  SUB: ["36", "38", "40", "42", "44", "46"],
+  CAS: ["XS", "S", "M", "L", "XL", "XXL"],
+  // Default
+  GEN: ["S", "M", "L", "XL"],
+};
 
 const DEPT_CFG: Record<string, {
   categories: { code: string; name: string }[];
@@ -73,6 +91,8 @@ function generateProducts(deptCounts: Record<string, number>): ProductLine[] {
       const col = cfg.colours[Math.floor(i / cfg.categories.length) % cfg.colours.length];
       const seq = String(i + 1).padStart(3, "0");
       const railId = `${deptPad}-${cat.code}-${col.code}-${seq}`;
+      const sizeSet = SIZE_SETS[cat.code] ?? SIZE_SETS["GEN"];
+      const size = sizeSet[i % sizeSet.length];
       lines.push({
         railId,
         productCode: `${dept.toUpperCase()}${cat.code}${seq}`,
@@ -80,6 +100,7 @@ function generateProducts(deptCounts: Record<string, number>): ProductLine[] {
         category: cat.name,
         colour: col.name,
         description: cfg.descriptions[i % cfg.descriptions.length],
+        size,
       });
     }
   }
