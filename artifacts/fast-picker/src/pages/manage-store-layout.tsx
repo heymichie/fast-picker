@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { LiveClock } from "@/components/LiveClock";
 
@@ -29,6 +29,10 @@ interface ProductEntry {
 
 interface Rail {
   id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
   department: string;
   category: string;
   colour: string;
@@ -36,6 +40,63 @@ interface Rail {
   products?: ProductEntry[];
 }
 
+// ── Canvas drawing helpers (read-only, same visuals as setup page) ────
+function drawLabel(ctx: CanvasRenderingContext2D, rx: number, ry: number, rw: number, railId: string) {
+  const boldPart = "Rail ID: ";
+  const idPart = railId;
+  const fontSize = 11;
+  const padding = 6;
+  const labelH = fontSize + padding * 2;
+
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+  const boldW = ctx.measureText(boldPart).width;
+  ctx.font = `italic ${fontSize}px Arial, sans-serif`;
+  const idW = ctx.measureText(idPart).width;
+
+  const labelW = Math.min(boldW + idW + padding * 2, Math.max(rw, 60));
+  ctx.fillStyle = "#daeeff";
+  ctx.fillRect(rx, ry, labelW, labelH);
+  ctx.strokeStyle = "#4a9eda";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rx, ry, labelW, labelH);
+
+  const textY = ry + padding + fontSize - 2;
+  ctx.fillStyle = "#1a2a3a";
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+  ctx.fillText(boldPart, rx + padding, textY);
+  ctx.font = `italic ${fontSize}px Arial, sans-serif`;
+  ctx.fillText(idPart, rx + padding + boldW, textY);
+}
+
+function redrawCanvas(
+  canvas: HTMLCanvasElement,
+  rails: Rail[],
+  floorImg: HTMLImageElement | null,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (floorImg) {
+    ctx.drawImage(floorImg, 0, 0, canvas.width, canvas.height);
+  }
+  const W = canvas.width;
+  const H = canvas.height;
+  for (const rail of rails) {
+    const rx = rail.x * W;
+    const ry = rail.y * H;
+    const rw = rail.w * W;
+    const rh = rail.h * H;
+    ctx.fillStyle = "rgba(74, 158, 218, 0.15)";
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = "#4a9eda";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.strokeRect(rx, ry, rw, rh);
+    drawLabel(ctx, rx, ry, rw, rail.id);
+  }
+}
+
+// ── Styles ─────────────────────────────────────────────────────────────
 const thStyle: React.CSSProperties = {
   padding: "0.6rem 1rem",
   textAlign: "left",
@@ -85,11 +146,16 @@ export default function ManageStoreLayout() {
   const user = getStoredUser();
   const isAdmin = user?.isAdmin === true;
 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const floorImgRef = useRef<HTMLImageElement | null>(null);
+
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [floors, setFloors] = useState<string[]>([]);
   const [selectedFloor, setSelectedFloor] = useState("");
   const [rails, setRails] = useState<Rail[]>([]);
+  const [floorPlanSrc, setFloorPlanSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // ── Load branches ──────────────────────────────────────────────────
@@ -115,7 +181,10 @@ export default function ManageStoreLayout() {
 
   // ── Load floors when branch changes ───────────────────────────────
   useEffect(() => {
-    if (!selectedBranch) { setFloors([]); setSelectedFloor(""); setRails([]); return; }
+    if (!selectedBranch) {
+      setFloors([]); setSelectedFloor(""); setRails([]); setFloorPlanSrc(null);
+      return;
+    }
     fetch(`/api/store-layout/floors?branchCode=${encodeURIComponent(selectedBranch)}`)
       .then((r) => r.json())
       .then((names: string[]) => {
@@ -125,18 +194,57 @@ export default function ManageStoreLayout() {
       .catch(() => { setFloors([]); setSelectedFloor(""); });
   }, [selectedBranch]);
 
-  // ── Load rails when floor changes ─────────────────────────────────
+  // ── Load floor plan + rails when floor changes ────────────────────
   useEffect(() => {
-    if (!selectedBranch || !selectedFloor) { setRails([]); return; }
+    if (!selectedBranch || !selectedFloor) {
+      setRails([]); setFloorPlanSrc(null); return;
+    }
     setLoading(true);
     fetch(`/api/store-layout?branchCode=${encodeURIComponent(selectedBranch)}&floorName=${encodeURIComponent(selectedFloor)}`)
       .then((r) => r.json())
       .then((d) => {
         setRails(Array.isArray(d.railsData) ? d.railsData : []);
+        setFloorPlanSrc(d.floorPlanImage ?? null);
       })
-      .catch(() => setRails([]))
+      .catch(() => { setRails([]); setFloorPlanSrc(null); })
       .finally(() => setLoading(false));
   }, [selectedBranch, selectedFloor]);
+
+  // ── Sync canvas size ───────────────────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+    function syncSize() {
+      if (!container || !canvas) return;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      redrawCanvas(canvas, rails, floorImgRef.current);
+    }
+    syncSize();
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [rails]);
+
+  // ── Load floor plan image then draw canvas ────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (!floorPlanSrc) {
+      floorImgRef.current = null;
+      redrawCanvas(canvas, rails, null);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      floorImgRef.current = img;
+      redrawCanvas(canvas, rails, img);
+    };
+    img.src = floorPlanSrc;
+  }, [floorPlanSrc, rails]);
 
   return (
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", color: "#fff" }}>
@@ -192,13 +300,8 @@ export default function ManageStoreLayout() {
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
             style={{
-              background: "#1a1a1a",
-              border: "1px solid #444",
-              color: "#fff",
-              borderRadius: 8,
-              padding: "0.45rem 1rem",
-              fontSize: "0.9rem",
-              cursor: "pointer",
+              background: "#1a1a1a", border: "1px solid #444", color: "#fff",
+              borderRadius: 8, padding: "0.45rem 1rem", fontSize: "0.9rem", cursor: "pointer",
             }}
           >
             {branches.length === 0 && <option value="">No branches</option>}
@@ -218,15 +321,15 @@ export default function ManageStoreLayout() {
           </div>
         )}
 
-        {/* Content */}
+        {/* Empty states */}
         {!selectedBranch && (
           <p style={{ color: "#555", fontSize: "0.9rem" }}>Select a branch to view its store layout.</p>
         )}
-
         {selectedBranch && floors.length === 0 && !loading && (
           <p style={{ color: "#555", fontSize: "0.9rem" }}>No floor plans saved for {selectedBranch} yet.</p>
         )}
 
+        {/* Floor plan canvas + rail table */}
         {selectedBranch && selectedFloor && (
           <>
             <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem" }}>
@@ -242,6 +345,37 @@ export default function ManageStoreLayout() {
 
             {loading && <p style={{ color: "#555", fontSize: "0.9rem" }}>Loading...</p>}
 
+            {/* ── Floor plan canvas ─────────────────────────────── */}
+            {!loading && (floorPlanSrc || rails.length > 0) && (
+              <div
+                ref={containerRef}
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "16/9",
+                  background: "#111",
+                  borderRadius: 10,
+                  border: "1px solid #2a2a2a",
+                  overflow: "hidden",
+                }}
+              >
+                {!floorPlanSrc && (
+                  <div style={{
+                    position: "absolute", inset: 0, display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    color: "#333", fontSize: "0.85rem", pointerEvents: "none",
+                  }}>
+                    No floor plan image uploaded
+                  </div>
+                )}
+                <canvas
+                  ref={canvasRef}
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                />
+              </div>
+            )}
+
+            {/* ── Rail table ───────────────────────────────────── */}
             {!loading && rails.length === 0 && (
               <p style={{ color: "#555", fontSize: "0.9rem" }}>No rails marked on this floor plan yet.</p>
             )}
@@ -270,7 +404,6 @@ export default function ManageStoreLayout() {
                             colour: rail.colour,
                             description: rail.description,
                           }];
-
                       return products.map((p, pi) => (
                         <tr key={`${rail.id}-${pi}`} style={{ background: pi % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
                           {pi === 0 && (
