@@ -75,6 +75,12 @@ const STATUS_META: Record<string, { label: string; bg: string; color: string }> 
 
 const STATUSES = ["all", "received", "picking", "picked", "dispatched"];
 
+type SortCol = "items" | "status" | "received" | "picker" | "pickDuration" | "comment";
+type SortDir = "asc" | "desc";
+
+const STATUS_ORDER: Record<string, number> = { received: 0, picking: 1, picked: 2, dispatched: 3 };
+const RATING_ORDER: Record<string, number> = { Excellent: 0, Good: 1, "Could Improve": 2, Poor: 3 };
+
 const thStyle: React.CSSProperties = {
   padding: "0.6rem 0.85rem", textAlign: "left", fontSize: "0.72rem", fontWeight: 700,
   color: "#777", textTransform: "uppercase", letterSpacing: "0.07em",
@@ -91,6 +97,30 @@ function StatusBadge({ status }: { status: string }) {
     <span style={{ background: m.bg, color: m.color, padding: "0.22rem 0.65rem", borderRadius: 20, fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap" }}>
       {m.label}
     </span>
+  );
+}
+
+function SortableHeader({
+  label, col, active, dir, onSort,
+}: {
+  label: string; col: SortCol; active: boolean; dir: SortDir; onSort: (c: SortCol) => void;
+}) {
+  return (
+    <th
+      onClick={() => onSort(col)}
+      style={{
+        ...thStyle, cursor: "pointer", userSelect: "none",
+        color: active ? "#fff" : "#777",
+        background: active ? "#121212" : "#0d0d0d",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        {label}
+        <span style={{ fontSize: "0.65rem", opacity: active ? 1 : 0.3, lineHeight: 1 }}>
+          {active ? (dir === "asc" ? "▲" : "▼") : "⇅"}
+        </span>
+      </span>
+    </th>
   );
 }
 
@@ -121,6 +151,19 @@ export default function ViewOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+  // Sort state
+  const [sortCol, setSortCol] = useState<SortCol | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function handleSort(col: SortCol) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
 
   // Modal state
   const [detailOrder, setDetailOrder] = useState<string | null>(null);
@@ -251,6 +294,36 @@ export default function ViewOrders() {
   }
   const perfRows = Object.entries(perfByPicker).sort(([, a], [, b]) => b.total - a.total);
 
+  // Sorted orders
+  const sortedOrders = sortCol
+    ? [...orders].sort((a, b) => {
+        let cmp = 0;
+        if (sortCol === "items") {
+          cmp = a.itemCount - b.itemCount;
+        } else if (sortCol === "status") {
+          cmp = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+        } else if (sortCol === "received") {
+          cmp = new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime();
+        } else if (sortCol === "picker") {
+          cmp = (a.assignedPickerName ?? "").localeCompare(b.assignedPickerName ?? "");
+        } else if (sortCol === "pickDuration") {
+          const ad = diffMinsRaw(a.pickingStartedAt, a.pickedAt);
+          const bd = diffMinsRaw(b.pickingStartedAt, b.pickedAt);
+          if (ad === null && bd === null) cmp = 0;
+          else if (ad === null) cmp = 1;
+          else if (bd === null) cmp = -1;
+          else cmp = ad - bd;
+        } else if (sortCol === "comment") {
+          const ar = pickRating(diffMinsRaw(a.pickingStartedAt, a.pickedAt), a.itemCount);
+          const br = pickRating(diffMinsRaw(b.pickingStartedAt, b.pickedAt), b.itemCount);
+          const ao = ar ? (RATING_ORDER[ar.label] ?? 99) : 99;
+          const bo = br ? (RATING_ORDER[br.label] ?? 99) : 99;
+          cmp = ao - bo;
+        }
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : orders;
+
   return (
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", color: "#fff" }}>
 
@@ -370,13 +443,22 @@ export default function ViewOrders() {
             <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: 820 }}>
               <thead>
                 <tr>
-                  {["Order No", "Branch", "Items", "Status", "Received", "Picker", "Pick Started", "Pick Duration", "Comment", "Dispatch Time", "Total Duration", ...(canReassign ? [""] : [])].map((h) => (
-                    <th key={h} style={thStyle}>{h}</th>
-                  ))}
+                  <th style={thStyle}>Order No</th>
+                  <th style={thStyle}>Branch</th>
+                  <SortableHeader label="Items"         col="items"        active={sortCol === "items"}        dir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Status"        col="status"       active={sortCol === "status"}       dir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Received"      col="received"     active={sortCol === "received"}     dir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Picker"        col="picker"       active={sortCol === "picker"}       dir={sortDir} onSort={handleSort} />
+                  <th style={thStyle}>Pick Started</th>
+                  <SortableHeader label="Pick Duration" col="pickDuration" active={sortCol === "pickDuration"} dir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Comment"       col="comment"      active={sortCol === "comment"}      dir={sortDir} onSort={handleSort} />
+                  <th style={thStyle}>Dispatch Time</th>
+                  <th style={thStyle}>Total Duration</th>
+                  {canReassign && <th style={thStyle}></th>}
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o, i) => {
+                {sortedOrders.map((o, i) => {
                   const pickDur = diffMins(o.pickingStartedAt, o.pickedAt);
                   const pickMinsRaw = diffMinsRaw(o.pickingStartedAt, o.pickedAt);
                   const rating = pickRating(pickMinsRaw, o.itemCount);
