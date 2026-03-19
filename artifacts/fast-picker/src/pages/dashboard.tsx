@@ -154,11 +154,17 @@ export default function Dashboard() {
           flexShrink: 0,
         }}
       >
-        <img
-          src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
-          alt="Fast Picker"
-          style={{ height: 48, objectFit: "contain" }}
-        />
+        <button
+          onClick={() => setLocation("/dashboard")}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
+          title="Go to Dashboard"
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+            alt="Fast Picker"
+            style={{ height: 48, objectFit: "contain" }}
+          />
+        </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
           {user && (

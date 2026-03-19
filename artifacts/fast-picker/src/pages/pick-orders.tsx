@@ -20,11 +20,17 @@ export default function PickOrders() {
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", color: "#fff" }}>
 
       <header style={{ display: "flex", alignItems: "center", padding: "0.75rem 1.5rem", gap: "1rem" }}>
-        <img
-          src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
-          alt="Fast Picker"
-          style={{ height: 56, objectFit: "contain", flexShrink: 0 }}
-        />
+        <button
+          onClick={() => setLocation("/dashboard")}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+          title="Go to Dashboard"
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+            alt="Fast Picker"
+            style={{ height: 56, objectFit: "contain" }}
+          />
+        </button>
         <h1 style={{ fontSize: "2.2rem", fontWeight: 700, color: "#fff", margin: 0, flex: 1, lineHeight: 1 }}>
           Account: {user ? `${user.forenames} ${user.surname}` : "(username)"}
         </h1>

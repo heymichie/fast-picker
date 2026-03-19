@@ -130,11 +130,17 @@ export default function CreateAccount() {
         }}
       >
         {/* Logo */}
-        <img
-          src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
-          alt="Fast Picker"
-          style={{ height: 56, objectFit: "contain", flexShrink: 0 }}
-        />
+        <button
+          onClick={() => setLocation("/dashboard")}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+          title="Go to Dashboard"
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+            alt="Fast Picker"
+            style={{ height: 56, objectFit: "contain" }}
+          />
+        </button>
 
         {/* Title */}
         <h1

@@ -111,11 +111,17 @@ export default function NewSignIn() {
             zIndex: 2,
           }}
         >
-          <img
-            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
-            alt="Fast Picker - Mishka Technologies"
-            style={{ width: "85%", objectFit: "contain" }}
-          />
+          <button
+            onClick={() => setLocation("/dashboard")}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", justifyContent: "center", width: "85%" }}
+            title="Go to Dashboard"
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+              alt="Fast Picker - Mishka Technologies"
+              style={{ width: "100%", objectFit: "contain" }}
+            />
+          </button>
           <p
             style={{
               fontFamily: "Georgia, 'Times New Roman', serif",

@@ -54,11 +54,17 @@ export default function UserSetupSuccess() {
         }}
       >
         {/* Logo */}
-        <img
-          src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
-          alt="Fast Picker - Mishka Technologies"
-          style={{ width: 200, objectFit: "contain", marginBottom: "1.5rem" }}
-        />
+        <button
+          onClick={() => setLocation("/dashboard")}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", marginBottom: "1.5rem" }}
+          title="Go to Dashboard"
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}images/fast-picker-logo.png`}
+            alt="Fast Picker - Mishka Technologies"
+            style={{ width: 200, objectFit: "contain" }}
+          />
+        </button>
 
         {/* SUCCESS! */}
         <h1
