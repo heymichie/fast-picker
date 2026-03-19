@@ -40,6 +40,32 @@ function diffMins(from: string | null, to: string | null): string {
   return `${Math.floor(diff / 60)}h ${diff % 60}m`;
 }
 
+function diffMinsRaw(from: string | null, to: string | null): number | null {
+  if (!from || !to) return null;
+  return (new Date(to).getTime() - new Date(from).getTime()) / 60_000;
+}
+
+interface Rating { label: string; color: string; bg: string }
+function pickRating(durationMins: number | null, items: number): Rating | null {
+  if (durationMins === null || !items) return null;
+  const rate = durationMins / items;
+  if (rate < 1)  return { label: "Excellent",     color: "#50d278", bg: "rgba(80,210,120,0.13)" };
+  if (rate === 1) return { label: "Good",          color: "#88aaff", bg: "rgba(100,140,255,0.13)" };
+  if (rate <= 2)  return { label: "Could Improve", color: "#ffb83c", bg: "rgba(255,180,60,0.13)" };
+  return           { label: "Poor",          color: "#ff5a5a", bg: "rgba(255,80,80,0.13)" };
+}
+
+function RatingBadge({ rating }: { rating: Rating }) {
+  return (
+    <span style={{
+      background: rating.bg, color: rating.color, padding: "0.2rem 0.6rem",
+      borderRadius: 20, fontSize: "0.74rem", fontWeight: 700, whiteSpace: "nowrap",
+    }}>
+      {rating.label}
+    </span>
+  );
+}
+
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
   received:   { label: "Received",   bg: "rgba(100,140,255,0.15)", color: "#88aaff" },
   picking:    { label: "Picking",    bg: "rgba(255,180,60,0.15)",  color: "#ffb83c" },
@@ -178,6 +204,25 @@ export default function ViewOrders() {
   }
   const showBranchSummary = selectedBranch === "ALL" && Object.keys(branchSummary).length > 0;
 
+  // Performance summary — grouped by picker, from all orders with a completed pick
+  type PerfRow = { pickerName: string; excellent: number; good: number; couldImprove: number; poor: number; total: number };
+  const perfByPicker: Record<string, PerfRow> = {};
+  for (const o of allOrders) {
+    if (!o.pickingStartedAt || !o.pickedAt || !o.assignedPickerId) continue;
+    const mins = diffMinsRaw(o.pickingStartedAt, o.pickedAt);
+    const r = pickRating(mins, o.itemCount);
+    if (!r) continue;
+    if (!perfByPicker[o.assignedPickerId]) {
+      perfByPicker[o.assignedPickerId] = { pickerName: o.assignedPickerName ?? o.assignedPickerId, excellent: 0, good: 0, couldImprove: 0, poor: 0, total: 0 };
+    }
+    perfByPicker[o.assignedPickerId].total++;
+    if (r.label === "Excellent")     perfByPicker[o.assignedPickerId].excellent++;
+    else if (r.label === "Good")     perfByPicker[o.assignedPickerId].good++;
+    else if (r.label === "Could Improve") perfByPicker[o.assignedPickerId].couldImprove++;
+    else                             perfByPicker[o.assignedPickerId].poor++;
+  }
+  const perfRows = Object.entries(perfByPicker).sort(([, a], [, b]) => b.total - a.total);
+
   return (
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", color: "#fff" }}>
 
@@ -297,7 +342,7 @@ export default function ViewOrders() {
             <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: 820 }}>
               <thead>
                 <tr>
-                  {["Order No", "Branch", "Items", "Status", "Received", "Picker", "Pick Started", "Pick Duration", "Dispatch Time", "Total Duration", ...(canReassign ? [""] : [])].map((h) => (
+                  {["Order No", "Branch", "Items", "Status", "Received", "Picker", "Pick Started", "Pick Duration", "Comment", "Dispatch Time", "Total Duration", ...(canReassign ? [""] : [])].map((h) => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
@@ -305,6 +350,8 @@ export default function ViewOrders() {
               <tbody>
                 {orders.map((o, i) => {
                   const pickDur = diffMins(o.pickingStartedAt, o.pickedAt);
+                  const pickMinsRaw = diffMinsRaw(o.pickingStartedAt, o.pickedAt);
+                  const rating = pickRating(pickMinsRaw, o.itemCount);
                   const totalDur = diffMins(o.receivedAt, o.dispatchedAt);
                   return (
                     <tr key={o.id} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
@@ -333,7 +380,10 @@ export default function ViewOrders() {
                           : <span style={{ color: "#3a3a3a" }}>Unassigned</span>}
                       </td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.pickingStartedAt ? "#ddd" : "#3a3a3a" }}>{fmt(o.pickingStartedAt)}</td>
-                      <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.pickedAt ? "#c07eff" : "#3a3a3a", fontWeight: 600 }}>{pickDur}</td>
+                      <td style={{ ...tdBase, whiteSpace: "nowrap", color: rating ? rating.color : (o.pickedAt ? "#c07eff" : "#3a3a3a"), fontWeight: 600 }}>{pickDur}</td>
+                      <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
+                        {rating ? <RatingBadge rating={rating} /> : <span style={{ color: "#333" }}>—</span>}
+                      </td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a" }}>{fmt(o.dispatchedAt)}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a", fontWeight: 600 }}>{totalDur}</td>
                       {canReassign && (
@@ -358,6 +408,52 @@ export default function ViewOrders() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Performance Summary */}
+        {perfRows.length > 0 && (
+          <div>
+            <h2 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>
+              Picker Performance Summary
+            </h2>
+            <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1a1a1a" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: 540 }}>
+                <thead>
+                  <tr>
+                    {["Picker", "Orders Picked", "Excellent", "Good", "Could Improve", "Poor"].map((h) => (
+                      <th key={h} style={{ ...thStyle, textAlign: h === "Picker" ? "left" : "center" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {perfRows.map(([pickerId, row], i) => (
+                    <tr key={pickerId} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
+                      <td style={{ ...tdBase, fontWeight: 600, color: "#fff" }}>
+                        {row.pickerName}
+                        <span style={{ marginLeft: 8, fontSize: "0.73rem", color: "#444", fontFamily: "monospace" }}>{pickerId}</span>
+                      </td>
+                      <td style={{ ...tdBase, textAlign: "center", color: "#888" }}>{row.total}</td>
+                      <td style={{ ...tdBase, textAlign: "center" }}>
+                        {row.excellent > 0 ? <span style={{ color: "#50d278", fontWeight: 700 }}>{row.excellent}</span> : <span style={{ color: "#2a2a2a" }}>—</span>}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: "center" }}>
+                        {row.good > 0 ? <span style={{ color: "#88aaff", fontWeight: 700 }}>{row.good}</span> : <span style={{ color: "#2a2a2a" }}>—</span>}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: "center" }}>
+                        {row.couldImprove > 0 ? <span style={{ color: "#ffb83c", fontWeight: 700 }}>{row.couldImprove}</span> : <span style={{ color: "#2a2a2a" }}>—</span>}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: "center" }}>
+                        {row.poor > 0 ? <span style={{ color: "#ff5a5a", fontWeight: 700 }}>{row.poor}</span> : <span style={{ color: "#2a2a2a" }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ margin: "0.5rem 0 0", fontSize: "0.72rem", color: "#444" }}>
+              Ratings based on pick speed per item — Excellent &lt;1 min/item · Good = 1 min/item · Could Improve 1–2 min/item · Poor &gt;2 min/item
+            </p>
           </div>
         )}
       </div>
