@@ -37,6 +37,21 @@ const REPORT_TYPES = [
   },
 ];
 
+interface ReportSection {
+  title: string;
+  columns: string[];
+  rows: string[][];
+  note?: string;
+}
+
+interface ReportData {
+  organisationName: string;
+  branchCode: string;
+  period: string;
+  generatedAt: string;
+  sections: ReportSection[];
+}
+
 const selectStyle: React.CSSProperties = {
   appearance: "none",
   WebkitAppearance: "none",
@@ -60,26 +75,23 @@ export default function Reports() {
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const isAdmin = user?.isAdmin === true;
 
   useEffect(() => {
-    // Always fetch live from the database so new branches appear automatically
     fetch("/api/accounts/branches")
       .then((r) => r.json())
       .then((data: string[]) => {
         if (isAdmin) {
-          // Administrators see all branches plus an "ALL" option
           setBranches(["ALL", ...data]);
         } else if (user?.branchCode && user.branchCode !== "ALL") {
-          // Non-admins are limited to their own assigned branch
           const myBranch = user.branchCode;
           setBranches(data.includes(myBranch) ? [myBranch] : [myBranch]);
           setSelectedBranch(myBranch);
         }
       })
       .catch(() => {
-        // Fallback to localStorage value if API is unavailable
         if (!isAdmin && user?.branchCode && user.branchCode !== "ALL") {
           setBranches([user.branchCode]);
           setSelectedBranch(user.branchCode);
@@ -91,15 +103,146 @@ export default function Reports() {
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  function handleDownload() {
-    const selectedReports = Object.entries(checked)
+  async function handleDownload() {
+    const selectedTypes = Object.entries(checked)
       .filter(([, v]) => v)
       .map(([k]) => k);
+
     if (!selectedBranch) { alert("Please select a branch code."); return; }
     if (!selectedYear) { alert("Please select a trading year."); return; }
     if (!selectedMonth) { alert("Please select a trading month."); return; }
-    if (selectedReports.length === 0) { alert("Please select at least one report type."); return; }
-    alert(`Download requested:\nBranch: ${selectedBranch}\nPeriod: ${selectedMonth} ${selectedYear}\nReports: ${selectedReports.join(", ")}`);
+    if (selectedTypes.length === 0) { alert("Please select at least one report type."); return; }
+
+    setIsDownloading(true);
+
+    try {
+      // Build query params
+      const params = new URLSearchParams({
+        branchCode: selectedBranch,
+        year: selectedYear,
+        month: selectedMonth,
+      });
+      selectedTypes.forEach((t) => params.append("types", t));
+
+      const resp = await fetch(`/api/reports?${params.toString()}`);
+      if (!resp.ok) throw new Error("Failed to fetch report data");
+      const data: ReportData = await resp.json();
+
+      // Dynamically import jspdf to keep initial bundle small
+      const { jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const margin = 14;
+
+      // ── Cover header ──────────────────────────────────────────────
+      doc.setFillColor(30, 30, 30);
+      doc.rect(0, 0, pageW, 28, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("FAST PICKER", margin, 12);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Mishka Technologies", margin, 18);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("REPORTS", pageW - margin, 12, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(data.organisationName, pageW - margin, 18, { align: "right" });
+      doc.text(`Generated: ${data.generatedAt}`, pageW - margin, 23, { align: "right" });
+
+      // ── Report meta ───────────────────────────────────────────────
+      let y = 36;
+      doc.setTextColor(30, 30, 30);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text(`Branch: ${data.branchCode === "ALL" ? "All Branches" : data.branchCode}`, margin, y);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Period: ${data.period}`, margin, y + 7);
+      doc.text(`Prepared by: ${user ? `${user.forenames} ${user.surname}` : "System"}`, margin, y + 13);
+
+      y += 22;
+
+      // ── Sections ──────────────────────────────────────────────────
+      for (const section of data.sections) {
+        // Section heading
+        doc.setFillColor(70, 70, 70);
+        doc.rect(margin, y, pageW - margin * 2, 7, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(section.title, margin + 3, y + 5);
+        y += 10;
+
+        if (section.note) {
+          doc.setTextColor(100, 100, 100);
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          doc.text(section.note, margin, y + 4, { maxWidth: pageW - margin * 2 });
+          y += 14;
+          continue;
+        }
+
+        if (section.rows.length === 0) {
+          doc.setTextColor(120, 120, 120);
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          doc.text("No records found for the selected period and branch.", margin, y + 4);
+          y += 12;
+          continue;
+        }
+
+        // Data table
+        autoTable(doc, {
+          startY: y,
+          head: [section.columns],
+          body: section.rows,
+          margin: { left: margin, right: margin },
+          styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 30, 30] },
+          headStyles: { fillColor: [100, 100, 100], textColor: 255, fontStyle: "bold" },
+          alternateRowStyles: { fillColor: [240, 240, 240] },
+          tableLineColor: [180, 180, 180],
+          tableLineWidth: 0.2,
+        });
+
+        y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+        // Add a new page if we're running low on space
+        if (y > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage();
+          y = 20;
+        }
+      }
+
+      // ── Footer on each page ───────────────────────────────────────
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFillColor(30, 30, 30);
+        doc.rect(0, doc.internal.pageSize.getHeight() - 10, pageW, 10, "F");
+        doc.setTextColor(180, 180, 180);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text("Fast Picker — Mishka Technologies | Confidential", margin, doc.internal.pageSize.getHeight() - 4);
+        doc.text(`Page ${i} of ${totalPages}`, pageW - margin, doc.internal.pageSize.getHeight() - 4, { align: "right" });
+      }
+
+      // ── Save ──────────────────────────────────────────────────────
+      const safeMonth = selectedMonth.slice(0, 3).toUpperCase();
+      const safeBranch = selectedBranch.replace(/\s+/g, "-");
+      doc.save(`FastPicker_Report_${safeBranch}_${safeMonth}${selectedYear}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   const cellLabel: React.CSSProperties = {
@@ -256,19 +399,21 @@ export default function Reports() {
         <button
           type="button"
           onClick={handleDownload}
+          disabled={isDownloading}
           style={{
-            background: "#fff",
-            color: "#1a6bc4",
+            background: isDownloading ? "#ccc" : "#fff",
+            color: isDownloading ? "#888" : "#1a6bc4",
             border: "none",
             borderRadius: 8,
             padding: "0.7rem 3.5rem",
             fontSize: "1.1rem",
             fontWeight: 600,
-            cursor: "pointer",
+            cursor: isDownloading ? "not-allowed" : "pointer",
             minWidth: 220,
+            transition: "all 0.2s",
           }}
         >
-          Download
+          {isDownloading ? "Generating PDF…" : "Download"}
         </button>
       </div>
     </div>
