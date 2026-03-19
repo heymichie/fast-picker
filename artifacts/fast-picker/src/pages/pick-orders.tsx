@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { LiveClock } from "@/components/LiveClock";
+import { OrderDetailModal } from "@/components/OrderDetailModal";
 
 function getStoredUser() {
   try {
@@ -25,10 +26,8 @@ interface Order {
   assignedPickerId: string | null;
   assignedPickerName: string | null;
   itemCount: number;
-  departmentCounts: string | null;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
 function fmt(ts: string | null): string {
   if (!ts) return "—";
   return new Date(ts).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
@@ -48,7 +47,6 @@ const STATUS_META: Record<string, { label: string; bg: string; color: string }> 
   dispatched: { label: "Dispatched", bg: "rgba(80,210,120,0.15)",  color: "#50d278" },
 };
 
-// Status the picker can advance to next
 const NEXT_STATUS: Record<string, { label: string; next: string } | null> = {
   received:   { label: "Start Picking", next: "picking" },
   picking:    { label: "Mark Picked",   next: "picked" },
@@ -59,10 +57,7 @@ const NEXT_STATUS: Record<string, { label: string; next: string } | null> = {
 function StatusBadge({ status }: { status: string }) {
   const m = STATUS_META[status] ?? { label: status, bg: "#333", color: "#aaa" };
   return (
-    <span style={{
-      background: m.bg, color: m.color, padding: "0.22rem 0.65rem",
-      borderRadius: 20, fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap",
-    }}>
+    <span style={{ background: m.bg, color: m.color, padding: "0.22rem 0.65rem", borderRadius: 20, fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap" }}>
       {m.label}
     </span>
   );
@@ -80,13 +75,15 @@ const tdBase: React.CSSProperties = {
 
 const STATUSES = ["all", "received", "picking", "picked", "dispatched"];
 
-// ── Component ─────────────────────────────────────────────────────────
 export default function PickOrders() {
   const [, setLocation] = useLocation();
   const user = getStoredUser();
 
   const isOrderPicker = user?.designation === "Order Picker";
   const isAdmin = user?.isAdmin === true;
+  const canReassign = isAdmin
+    || user?.designation === "Store Manager"
+    || user?.designation === "Store Supervisor";
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,10 +93,13 @@ export default function PickOrders() {
   const [advancing, setAdvancing] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Set up available branches for non-picker roles
+  // Modal state
+  const [detailOrder, setDetailOrder] = useState<string | null>(null);
+
+  // Branch setup for non-picker roles
   useEffect(() => {
-    if (isOrderPicker) return; // pickers see their own orders regardless of branch
-    if (isAdmin) {
+    if (isOrderPicker) return;
+    if (isAdmin || user?.branchCode === "ALL") {
       fetch("/api/orders/branches")
         .then((r) => r.json())
         .then((data: string[]) => setBranches(["ALL", ...data]))
@@ -113,7 +113,6 @@ export default function PickOrders() {
   const fetchOrders = useCallback(() => {
     const params = new URLSearchParams();
     if (isOrderPicker && user?.username) {
-      // Order Pickers only see their own assigned orders
       params.set("pickerId", user.username);
     } else {
       if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
@@ -127,18 +126,13 @@ export default function PickOrders() {
       .finally(() => setLoading(false));
   }, [isOrderPicker, user?.username, selectedBranch, statusFilter]);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchOrders();
-  }, [fetchOrders]);
+  useEffect(() => { setLoading(true); fetchOrders(); }, [fetchOrders]);
 
-  // Auto-refresh every 30 seconds
   useEffect(() => {
     const id = setInterval(fetchOrders, 30_000);
     return () => clearInterval(id);
   }, [fetchOrders]);
 
-  // Advance an order's status
   async function advanceStatus(orderNumber: string, nextStatus: string) {
     setAdvancing((prev) => new Set(prev).add(orderNumber));
     try {
@@ -155,14 +149,12 @@ export default function PickOrders() {
     }
   }
 
-  // Stats from current visible orders
-  const allVisible = orders; // (filtered by API already)
   const stats = {
-    total: allVisible.length,
-    received: allVisible.filter((o) => o.status === "received").length,
-    picking: allVisible.filter((o) => o.status === "picking").length,
-    picked: allVisible.filter((o) => o.status === "picked").length,
-    dispatched: allVisible.filter((o) => o.status === "dispatched").length,
+    total: orders.length,
+    received: orders.filter((o) => o.status === "received").length,
+    picking: orders.filter((o) => o.status === "picking").length,
+    picked: orders.filter((o) => o.status === "picked").length,
+    dispatched: orders.filter((o) => o.status === "dispatched").length,
   };
 
   return (
@@ -177,7 +169,7 @@ export default function PickOrders() {
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#fff", margin: 0, lineHeight: 1 }}>Pick Orders</h1>
           <p style={{ margin: "0.2rem 0 0", fontSize: "0.78rem", color: "#555" }}>
-            {isOrderPicker ? `Showing orders assigned to ${user?.forenames} ${user?.surname}` : "All orders"}{" "}
+            {isOrderPicker ? `Assigned to ${user?.forenames} ${user?.surname}` : "All orders"}{" "}
             · Refreshed at {lastRefresh.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </p>
         </div>
@@ -199,7 +191,7 @@ export default function PickOrders() {
 
       <div style={{ flex: 1, padding: "1rem 1.5rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-        {/* Filters — only shown to non-picker roles */}
+        {/* Filters for non-pickers */}
         {!isOrderPicker && (
           <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
             {branches.length > 1 && (
@@ -257,23 +249,20 @@ export default function PickOrders() {
         {/* Stat cards */}
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           {[
-            { label: isOrderPicker ? "My Orders" : "Total", value: stats.total, color: "#fff" },
+            { label: isOrderPicker ? "My Orders" : "Total", value: stats.total,      color: "#fff" },
             { label: "Received",   value: stats.received,   color: "#88aaff" },
             { label: "Picking",    value: stats.picking,    color: "#ffb83c" },
             { label: "Picked",     value: stats.picked,     color: "#c07eff" },
             { label: "Dispatched", value: stats.dispatched, color: "#50d278" },
           ].map(({ label, value, color }) => (
-            <div key={label} style={{
-              background: "#111", border: "1px solid #222", borderRadius: 12,
-              padding: "1.1rem 1.4rem", minWidth: 110, display: "flex", flexDirection: "column", gap: "0.3rem",
-            }}>
+            <div key={label} style={{ background: "#111", border: "1px solid #222", borderRadius: 12, padding: "1.1rem 1.4rem", minWidth: 110, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
               <span style={{ fontSize: "2rem", fontWeight: 800, color, lineHeight: 1 }}>{value}</span>
               <span style={{ fontSize: "0.78rem", color: "#666", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
             </div>
           ))}
         </div>
 
-        {/* Orders table */}
+        {/* Orders table header */}
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
           <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>
             {isOrderPicker ? "My Assigned Orders" : "All Orders"}
@@ -301,7 +290,7 @@ export default function PickOrders() {
                   <th style={thStyle}>Pick Started</th>
                   <th style={thStyle}>Pick Duration</th>
                   <th style={thStyle}>Dispatched</th>
-                  {isOrderPicker && <th style={thStyle}>Action</th>}
+                  <th style={thStyle}>{isOrderPicker ? "Action" : ""}</th>
                 </tr>
               </thead>
               <tbody>
@@ -311,8 +300,20 @@ export default function PickOrders() {
                   const isAdvancing = advancing.has(o.orderNumber);
                   return (
                     <tr key={o.id} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
-                      <td style={{ ...tdBase, fontFamily: "monospace", fontWeight: 700, fontSize: "0.8rem", color: "#ccc", whiteSpace: "nowrap" }}>
-                        {o.orderNumber}
+                      {/* Clickable order number */}
+                      <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setDetailOrder(o.orderNumber)}
+                          style={{
+                            background: "none", border: "none", padding: 0, cursor: "pointer",
+                            fontFamily: "monospace", fontWeight: 700, fontSize: "0.8rem",
+                            color: "#88aaff", textDecoration: "underline", textDecorationColor: "rgba(136,170,255,0.3)",
+                            textUnderlineOffset: 3,
+                          }}
+                        >
+                          {o.orderNumber}
+                        </button>
                       </td>
                       {!isOrderPicker && (
                         <td style={{ ...tdBase, fontFamily: "monospace", color: "#888", fontSize: "0.82rem" }}>{o.branchCode}</td>
@@ -330,9 +331,10 @@ export default function PickOrders() {
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.pickingStartedAt ? "#ddd" : "#3a3a3a" }}>{fmt(o.pickingStartedAt)}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.pickedAt ? "#c07eff" : "#3a3a3a", fontWeight: 600 }}>{pickDur}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a" }}>{fmt(o.dispatchedAt)}</td>
-                      {isOrderPicker && (
-                        <td style={tdBase}>
-                          {next ? (
+                      <td style={tdBase}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {/* Picker action button */}
+                          {isOrderPicker && next && (
                             <button
                               type="button"
                               disabled={isAdvancing}
@@ -346,11 +348,26 @@ export default function PickOrders() {
                             >
                               {isAdvancing ? "…" : next.label}
                             </button>
-                          ) : (
+                          )}
+                          {isOrderPicker && !next && (
                             <span style={{ color: "#2a5a2a", fontSize: "0.78rem", fontWeight: 700 }}>✓ Done</span>
                           )}
-                        </td>
-                      )}
+                          {/* Reassign button for managers */}
+                          {canReassign && o.status === "received" && (
+                            <button
+                              type="button"
+                              onClick={() => setDetailOrder(o.orderNumber)}
+                              style={{
+                                background: "#1a1a2a", border: "1px solid #3a3a6a",
+                                color: "#88aaff", padding: "0.28rem 0.7rem", borderRadius: 6,
+                                fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                              }}
+                            >
+                              Reassign
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -359,6 +376,14 @@ export default function PickOrders() {
           </div>
         )}
       </div>
+
+      {/* Order Detail Modal */}
+      <OrderDetailModal
+        orderNumber={detailOrder}
+        canReassign={canReassign}
+        onClose={() => setDetailOrder(null)}
+        onReassigned={() => { fetchOrders(); }}
+      />
     </div>
   );
 }

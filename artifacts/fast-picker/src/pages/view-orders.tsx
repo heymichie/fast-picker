@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { LiveClock } from "@/components/LiveClock";
+import { OrderDetailModal } from "@/components/OrderDetailModal";
 
 function getStoredUser() {
   try {
@@ -27,7 +28,6 @@ interface Order {
   itemCount: number;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────
 function fmt(ts: string | null): string {
   if (!ts) return "—";
   return new Date(ts).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
@@ -41,15 +41,14 @@ function diffMins(from: string | null, to: string | null): string {
 }
 
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
-  received: { label: "Received",   bg: "rgba(100,140,255,0.15)", color: "#88aaff" },
-  picking:  { label: "Picking",    bg: "rgba(255,180,60,0.15)",  color: "#ffb83c" },
-  picked:   { label: "Picked",     bg: "rgba(160,90,255,0.15)",  color: "#c07eff" },
-  dispatched:{ label: "Dispatched", bg: "rgba(80,210,120,0.15)", color: "#50d278" },
+  received:   { label: "Received",   bg: "rgba(100,140,255,0.15)", color: "#88aaff" },
+  picking:    { label: "Picking",    bg: "rgba(255,180,60,0.15)",  color: "#ffb83c" },
+  picked:     { label: "Picked",     bg: "rgba(160,90,255,0.15)",  color: "#c07eff" },
+  dispatched: { label: "Dispatched", bg: "rgba(80,210,120,0.15)",  color: "#50d278" },
 };
 
 const STATUSES = ["all", "received", "picking", "picked", "dispatched"];
 
-// ── Styles ─────────────────────────────────────────────────────────────
 const thStyle: React.CSSProperties = {
   padding: "0.6rem 0.85rem", textAlign: "left", fontSize: "0.72rem", fontWeight: 700,
   color: "#777", textTransform: "uppercase", letterSpacing: "0.07em",
@@ -78,13 +77,15 @@ function StatCard({ label, value, color }: { label: string; value: number; color
   );
 }
 
-// ── Component ──────────────────────────────────────────────────────────
 export default function ViewOrders() {
   const [, setLocation] = useLocation();
   const user = getStoredUser();
 
   const isOrderPicker = user?.designation === "Order Picker";
   const isAdmin = user?.isAdmin === true;
+  const canReassign = isAdmin
+    || user?.designation === "Store Manager"
+    || user?.designation === "Store Supervisor";
 
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("ALL");
@@ -93,36 +94,36 @@ export default function ViewOrders() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Build query params — Order Pickers always scope to their own pickerId
-  function buildParams(extraStatus?: string) {
+  // Modal state
+  const [detailOrder, setDetailOrder] = useState<string | null>(null);
+
+  function buildParams(statusOverride?: string) {
     const params = new URLSearchParams();
     if (isOrderPicker && user?.username) {
       params.set("pickerId", user.username);
     } else {
       if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
     }
-    const s = extraStatus ?? statusFilter;
+    const s = statusOverride ?? statusFilter;
     if (s && s !== "all") params.set("status", s);
     return params;
   }
 
-  // Load available branches (not needed for Order Pickers)
+  // Load branches — Order Pickers don't need branch filter
   useEffect(() => {
     if (isOrderPicker) return;
-    if (isAdmin) {
+    if (isAdmin || user?.branchCode === "ALL") {
       fetch("/api/orders/branches")
         .then((r) => r.json())
         .then((data: string[]) => { setBranches(["ALL", ...data]); setSelectedBranch("ALL"); })
-        .catch(() => { setBranches(["ALL"]); });
+        .catch(() => setBranches(["ALL"]));
     } else if (user?.branchCode) {
       setBranches([user.branchCode]);
       setSelectedBranch(user.branchCode);
     }
   }, []);
 
-  // Fetch orders
-  useEffect(() => {
-    setLoading(true);
+  const fetchOrders = useCallback(() => {
     fetch(`/api/orders?${buildParams()}`)
       .then((r) => r.json())
       .then((data: Order[]) => { setOrders(Array.isArray(data) ? data : []); setLastRefresh(new Date()); })
@@ -130,18 +131,15 @@ export default function ViewOrders() {
       .finally(() => setLoading(false));
   }, [selectedBranch, statusFilter]);
 
+  useEffect(() => { setLoading(true); fetchOrders(); }, [fetchOrders]);
+
   // Auto-refresh every 60 seconds
   useEffect(() => {
-    const id = setInterval(() => {
-      fetch(`/api/orders?${buildParams()}`)
-        .then((r) => r.json())
-        .then((data: Order[]) => { setOrders(Array.isArray(data) ? data : []); setLastRefresh(new Date()); })
-        .catch(() => {});
-    }, 60_000);
+    const id = setInterval(fetchOrders, 60_000);
     return () => clearInterval(id);
-  }, [selectedBranch, statusFilter]);
+  }, [fetchOrders]);
 
-  // ── Stats (from ALL orders for selected branch, ignoring status filter) ──
+  // Stats (all statuses, same branch/picker filter)
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   useEffect(() => {
     fetch(`/api/orders?${buildParams("all")}`)
@@ -158,16 +156,15 @@ export default function ViewOrders() {
     dispatched: allOrders.filter((o) => o.status === "dispatched").length,
   };
 
-  // ── Per-branch summary ─────────────────────────────────────────────
+  // Per-branch summary
   const branchSummary: Record<string, { total: number; dispatched: number; picking: number; received: number; avgPickMins: number | null }> = {};
   for (const o of allOrders) {
     if (!branchSummary[o.branchCode]) branchSummary[o.branchCode] = { total: 0, dispatched: 0, picking: 0, received: 0, avgPickMins: null };
     branchSummary[o.branchCode].total++;
     if (o.status === "dispatched") branchSummary[o.branchCode].dispatched++;
-    if (o.status === "picking") branchSummary[o.branchCode].picking++;
-    if (o.status === "received") branchSummary[o.branchCode].received++;
+    if (o.status === "picking")    branchSummary[o.branchCode].picking++;
+    if (o.status === "received")   branchSummary[o.branchCode].received++;
   }
-  // Average pick duration per branch (only for picked/dispatched with both timestamps)
   const pickTimes: Record<string, number[]> = {};
   for (const o of allOrders) {
     if (o.pickingStartedAt && o.pickedAt) {
@@ -177,11 +174,8 @@ export default function ViewOrders() {
   }
   for (const b of Object.keys(branchSummary)) {
     const times = pickTimes[b];
-    if (times && times.length > 0) {
-      branchSummary[b].avgPickMins = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-    }
+    if (times?.length) branchSummary[b].avgPickMins = Math.round(times.reduce((a, c) => a + c, 0) / times.length);
   }
-
   const showBranchSummary = selectedBranch === "ALL" && Object.keys(branchSummary).length > 0;
 
   return (
@@ -217,47 +211,49 @@ export default function ViewOrders() {
 
       <div style={{ flex: 1, padding: "1rem 1.5rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-        {/* ── Filters ────────────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
-          {branches.length > 1 && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <label style={{ fontSize: "0.8rem", color: "#666", fontWeight: 600, whiteSpace: "nowrap" }}>Branch</label>
-              <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}
-                style={{ background: "#111", border: "1px solid #333", color: "#fff", borderRadius: 8, padding: "0.4rem 0.85rem", fontSize: "0.88rem", cursor: "pointer", outline: "none" }}>
-                {branches.map((b) => <option key={b} value={b}>{b === "ALL" ? "All Branches" : b}</option>)}
-              </select>
+        {/* Filters */}
+        {!isOrderPicker && (
+          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
+            {branches.length > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <label style={{ fontSize: "0.8rem", color: "#666", fontWeight: 600, whiteSpace: "nowrap" }}>Branch</label>
+                <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}
+                  style={{ background: "#111", border: "1px solid #333", color: "#fff", borderRadius: 8, padding: "0.4rem 0.85rem", fontSize: "0.88rem", cursor: "pointer", outline: "none" }}>
+                  {branches.map((b) => <option key={b} value={b}>{b === "ALL" ? "All Branches" : b}</option>)}
+                </select>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+              {STATUSES.map((s) => {
+                const active = statusFilter === s;
+                const meta = STATUS_META[s];
+                return (
+                  <button key={s} type="button" onClick={() => setStatusFilter(s)}
+                    style={{
+                      padding: "0.3rem 0.85rem", borderRadius: 20, fontSize: "0.82rem",
+                      fontWeight: active ? 700 : 500, cursor: "pointer",
+                      background: active ? (meta?.bg ?? "rgba(255,255,255,0.1)") : "transparent",
+                      color: active ? (meta?.color ?? "#fff") : "#555",
+                      border: active ? `1.5px solid ${meta?.color ?? "#fff"}` : "1px solid #2a2a2a",
+                    }}>
+                    {s === "all" ? "All Statuses" : STATUS_META[s]?.label ?? s}
+                  </button>
+                );
+              })}
             </div>
-          )}
-
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-            {STATUSES.map((s) => {
-              const active = statusFilter === s;
-              const meta = STATUS_META[s];
-              return (
-                <button key={s} type="button" onClick={() => setStatusFilter(s)}
-                  style={{
-                    padding: "0.3rem 0.85rem", borderRadius: 20, fontSize: "0.82rem", fontWeight: active ? 700 : 500, cursor: "pointer",
-                    background: active ? (meta?.bg ?? "rgba(255,255,255,0.1)") : "transparent",
-                    color: active ? (meta?.color ?? "#fff") : "#555",
-                    border: active ? `1.5px solid ${meta?.color ?? "#fff"}` : "1px solid #2a2a2a",
-                  }}>
-                  {s === "all" ? "All Statuses" : STATUS_META[s]?.label ?? s}
-                </button>
-              );
-            })}
           </div>
-        </div>
+        )}
 
-        {/* ── Summary stat cards ─────────────────────────────────── */}
+        {/* Stat cards */}
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <StatCard label="Total Today" value={stats.total} color="#fff" />
-          <StatCard label="Received" value={stats.received} color="#88aaff" />
-          <StatCard label="Picking" value={stats.picking} color="#ffb83c" />
-          <StatCard label="Picked" value={stats.picked} color="#c07eff" />
-          <StatCard label="Dispatched" value={stats.dispatched} color="#50d278" />
+          <StatCard label="Total Today" value={stats.total}      color="#fff" />
+          <StatCard label="Received"    value={stats.received}   color="#88aaff" />
+          <StatCard label="Picking"     value={stats.picking}    color="#ffb83c" />
+          <StatCard label="Picked"      value={stats.picked}     color="#c07eff" />
+          <StatCard label="Dispatched"  value={stats.dispatched} color="#50d278" />
         </div>
 
-        {/* ── Per-branch summary ─────────────────────────────────── */}
+        {/* Per-branch summary */}
         {showBranchSummary && (
           <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1a1a1a" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d" }}>
@@ -284,11 +280,9 @@ export default function ViewOrders() {
           </div>
         )}
 
-        {/* ── Orders table ───────────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "0.5rem" }}>
-          <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>
-            Order Details
-          </h2>
+        {/* Orders table */}
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>Order Details</h2>
           <span style={{ fontSize: "0.78rem", color: "#444" }}>{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
         </div>
 
@@ -303,7 +297,7 @@ export default function ViewOrders() {
             <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: 820 }}>
               <thead>
                 <tr>
-                  {["Order No", "Branch", "Items", "Status", "Received", "Picker", "Pick Started", "Pick Duration", "Dispatch Time", "Total Duration"].map((h) => (
+                  {["Order No", "Branch", "Items", "Status", "Received", "Picker", "Pick Started", "Pick Duration", "Dispatch Time", "Total Duration", ...(canReassign ? [""] : [])].map((h) => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
@@ -314,8 +308,20 @@ export default function ViewOrders() {
                   const totalDur = diffMins(o.receivedAt, o.dispatchedAt);
                   return (
                     <tr key={o.id} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
-                      <td style={{ ...tdBase, fontFamily: "monospace", fontWeight: 700, fontSize: "0.8rem", color: "#ccc", whiteSpace: "nowrap" }}>
-                        {o.orderNumber}
+                      {/* Clickable order number */}
+                      <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setDetailOrder(o.orderNumber)}
+                          style={{
+                            background: "none", border: "none", padding: 0, cursor: "pointer",
+                            fontFamily: "monospace", fontWeight: 700, fontSize: "0.8rem",
+                            color: "#88aaff", textDecoration: "underline", textDecorationColor: "rgba(136,170,255,0.3)",
+                            textUnderlineOffset: 3,
+                          }}
+                        >
+                          {o.orderNumber}
+                        </button>
                       </td>
                       <td style={{ ...tdBase, fontFamily: "monospace", color: "#888", fontSize: "0.82rem" }}>{o.branchCode}</td>
                       <td style={{ ...tdBase, textAlign: "center" }}>{o.itemCount}</td>
@@ -330,6 +336,23 @@ export default function ViewOrders() {
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.pickedAt ? "#c07eff" : "#3a3a3a", fontWeight: 600 }}>{pickDur}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a" }}>{fmt(o.dispatchedAt)}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a", fontWeight: 600 }}>{totalDur}</td>
+                      {canReassign && (
+                        <td style={tdBase}>
+                          {o.status === "received" && (
+                            <button
+                              type="button"
+                              onClick={() => setDetailOrder(o.orderNumber)}
+                              style={{
+                                background: "#1a1a2a", border: "1px solid #3a3a6a",
+                                color: "#88aaff", padding: "0.28rem 0.7rem", borderRadius: 6,
+                                fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                              }}
+                            >
+                              Reassign
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -338,6 +361,14 @@ export default function ViewOrders() {
           </div>
         )}
       </div>
+
+      {/* Order Detail Modal */}
+      <OrderDetailModal
+        orderNumber={detailOrder}
+        canReassign={canReassign}
+        onClose={() => setDetailOrder(null)}
+        onReassigned={() => { fetchOrders(); }}
+      />
     </div>
   );
 }

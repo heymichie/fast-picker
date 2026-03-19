@@ -1,9 +1,90 @@
 import { Router, type IRouter } from "express";
 import { db, ordersTable, usersTable } from "@workspace/db";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and, isNull, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+// ── Product templates ─────────────────────────────────────────────────
+interface ProductLine {
+  railId: string;
+  productCode: string;
+  dept: string;
+  category: string;
+  colour: string;
+  description: string;
+}
+
+const DEPT_CFG: Record<string, {
+  categories: { code: string; name: string }[];
+  colours: { code: string; name: string }[];
+  descriptions: string[];
+}> = {
+  "02": {
+    categories: [
+      { code: "TOP", name: "Tops" },
+      { code: "JNS", name: "Jeans" },
+      { code: "DRS", name: "Dresses" },
+      { code: "SKT", name: "Skirts" },
+      { code: "JCK", name: "Jackets" },
+    ],
+    colours: [
+      { code: "BLK", name: "Black" }, { code: "WHT", name: "White" },
+      { code: "RED", name: "Red" },   { code: "BLU", name: "Blue" },
+      { code: "GRN", name: "Green" }, { code: "PNK", name: "Pink" },
+    ],
+    descriptions: [
+      "Ladies Printed Crop Top", "Ladies High-Waist Skinny Jeans",
+      "Floral Wrap Dress", "Pleated Mini Skirt", "Oversized Blazer",
+    ],
+  },
+  "12": {
+    categories: [
+      { code: "SHT", name: "Shirts" },
+      { code: "TRS", name: "Trousers" },
+      { code: "JCK", name: "Jackets" },
+      { code: "SUB", name: "Suits" },
+      { code: "CAS", name: "Casual" },
+    ],
+    colours: [
+      { code: "NVY", name: "Navy" }, { code: "GRY", name: "Grey" },
+      { code: "BLK", name: "Black" }, { code: "BRN", name: "Brown" },
+      { code: "WHT", name: "White" },
+    ],
+    descriptions: [
+      "Formal Oxford Shirt", "Slim Fit Chino Trousers",
+      "Winter Quilted Jacket", "3-Piece Business Suit", "Casual Polo Shirt",
+    ],
+  },
+};
+const DEFAULT_CFG = {
+  categories: [{ code: "GEN", name: "General" }],
+  colours: [{ code: "AST", name: "Assorted" }],
+  descriptions: ["General Merchandise"],
+};
+
+function generateProducts(deptCounts: Record<string, number>): ProductLine[] {
+  const lines: ProductLine[] = [];
+  for (const [dept, count] of Object.entries(deptCounts)) {
+    const cfg = DEPT_CFG[dept] ?? DEFAULT_CFG;
+    const deptPad = dept.padStart(3, "0");
+    for (let i = 0; i < count; i++) {
+      const cat = cfg.categories[i % cfg.categories.length];
+      const col = cfg.colours[Math.floor(i / cfg.categories.length) % cfg.colours.length];
+      const seq = String(i + 1).padStart(3, "0");
+      const railId = `${deptPad}-${cat.code}-${col.code}-${seq}`;
+      lines.push({
+        railId,
+        productCode: `${dept.toUpperCase()}${cat.code}${seq}`,
+        dept: deptPad,
+        category: cat.name,
+        colour: col.name,
+        description: cfg.descriptions[i % cfg.descriptions.length],
+      });
+    }
+  }
+  return lines;
+}
 
 // ── Schema migration ──────────────────────────────────────────────────
 async function ensureTable() {
@@ -21,19 +102,29 @@ async function ensureTable() {
       assigned_picker_name TEXT,
       item_count INTEGER NOT NULL DEFAULT 0,
       department_counts TEXT,
+      products TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
-  // Add column if the table existed before this field was introduced
-  await db.execute(sql`
-    ALTER TABLE orders ADD COLUMN IF NOT EXISTS department_counts TEXT
-  `);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS department_counts TEXT`);
+  await db.execute(sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS products TEXT`);
 }
 
 // ── Auto-assignment ───────────────────────────────────────────────────
-// Given a branch and dept-count map, find the best Order Picker to assign.
-// Priority: exact branch + exact dept > exact branch + ALL dept
-//           > ALL branch + exact dept > ALL branch + ALL dept
+// Returns all active Order Pickers eligible for a given branch+dept.
+async function getEligiblePickers(orderBranch: string, topDept: string) {
+  return db
+    .select({
+      username: usersTable.username,
+      forenames: usersTable.forenames,
+      surname: usersTable.surname,
+      branchCode: usersTable.branchCode,
+      department: usersTable.department,
+    })
+    .from(usersTable)
+    .where(and(eq(usersTable.rights, "Order Picker"), eq(usersTable.isActive, true)));
+}
+
 async function pickAssignee(
   orderBranch: string,
   deptCounts: Record<string, number>,
@@ -46,43 +137,57 @@ async function pickAssignee(
   }
   if (!topDept) return { pickerId: null, pickerName: null };
 
-  // Fetch all active Order Pickers
-  const pickers = await db
-    .select({
-      username: usersTable.username,
-      forenames: usersTable.forenames,
-      surname: usersTable.surname,
-      branchCode: usersTable.branchCode,
-      department: usersTable.department,
-    })
-    .from(usersTable)
-    .where(and(eq(usersTable.rights, "Order Picker"), eq(usersTable.isActive, true)));
+  const allPickers = await getEligiblePickers(orderBranch, topDept);
 
-  // Filter to candidates that can handle this branch + dept
-  const candidates = pickers.filter(
+  // Filter to branch+dept qualified candidates
+  const candidates = allPickers.filter(
     (p) =>
       (p.branchCode === orderBranch || p.branchCode === "ALL") &&
       (p.department === topDept || p.department === "ALL"),
   );
   if (candidates.length === 0) return { pickerId: null, pickerName: null };
 
-  // Apply priority tiers
+  // Priority tiers (best match first)
   const tiers = [
     (p: typeof candidates[0]) => p.branchCode === orderBranch && p.department === topDept,
     (p: typeof candidates[0]) => p.branchCode === orderBranch && p.department === "ALL",
     (p: typeof candidates[0]) => p.branchCode === "ALL" && p.department === topDept,
     (p: typeof candidates[0]) => p.branchCode === "ALL" && p.department === "ALL",
   ];
-  for (const match of tiers) {
-    const found = candidates.find(match);
-    if (found) {
-      return {
-        pickerId: found.username,
-        pickerName: `${found.forenames} ${found.surname}`,
-      };
+
+  let primary: typeof candidates[0] | undefined;
+  for (const tier of tiers) {
+    primary = candidates.find(tier);
+    if (primary) break;
+  }
+  if (!primary) return { pickerId: null, pickerName: null };
+
+  // ── Auto-rebalance: if primary already has >2 active orders, ────────
+  // ── prefer an unoccupied picker who also qualifies            ────────
+  const activeRows = await db
+    .select({ pickerId: ordersTable.assignedPickerId, cnt: sql<number>`count(*)::int` })
+    .from(ordersTable)
+    .where(
+      and(
+        inArray(ordersTable.status, ["received", "picking"]),
+        sql`assigned_picker_id IS NOT NULL`,
+      ),
+    )
+    .groupBy(ordersTable.assignedPickerId);
+  const activeCounts = new Map(activeRows.map((r) => [r.pickerId, Number(r.cnt)]));
+
+  const primaryActive = activeCounts.get(primary.username) ?? 0;
+  if (primaryActive > 2) {
+    // Find any qualified candidate with zero active orders
+    const unoccupied = candidates.find(
+      (c) => c.username !== primary!.username && (activeCounts.get(c.username) ?? 0) === 0,
+    );
+    if (unoccupied) {
+      return { pickerId: unoccupied.username, pickerName: `${unoccupied.forenames} ${unoccupied.surname}` };
     }
   }
-  return { pickerId: null, pickerName: null };
+
+  return { pickerId: primary.username, pickerName: `${primary.forenames} ${primary.surname}` };
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────
@@ -151,7 +256,7 @@ async function seedIfEmpty() {
     { no: "ORD-20260319-018", branch: "PTA004", status: "picked",     recv: 250, pStart: 243, pEnd: 221, disp: null, items: 9 },
     { no: "ORD-20260319-019", branch: "PTA004", status: "picking",    recv: 110, pStart: 103, pEnd: null, disp: null, items: 20 },
     { no: "ORD-20260319-020", branch: "PTA004", status: "received",   recv: 45,  pStart: null, pEnd: null, disp: null, items: 3 },
-    // Branch 501 — for XavierB (dept 02) and PaulN (dept 12, ALL branches)
+    // Branch 501
     { no: "ORD-20260319-021", branch: "501",    status: "dispatched", recv: 360, pStart: 352, pEnd: 330, disp: 320, items: 12 },
     { no: "ORD-20260319-022", branch: "501",    status: "dispatched", recv: 300, pStart: 291, pEnd: 270, disp: 260, items: 15 },
     { no: "ORD-20260319-023", branch: "501",    status: "picked",     recv: 180, pStart: 172, pEnd: 150, disp: null, items: 19 },
@@ -161,6 +266,7 @@ async function seedIfEmpty() {
 
   for (const s of seeds) {
     const deptCounts = SEED_DEPT_COUNTS[s.no] ?? {};
+    const products = generateProducts(deptCounts);
     await db.insert(ordersTable).values({
       orderNumber: s.no,
       branchCode: s.branch,
@@ -171,27 +277,36 @@ async function seedIfEmpty() {
       dispatchedAt: s.disp != null ? ago(s.disp) : null,
       itemCount: s.items,
       departmentCounts: JSON.stringify(deptCounts),
+      products: JSON.stringify(products),
     }).onConflictDoNothing();
   }
 }
 
-// Patch existing orders that have no department_counts (e.g. from old seed)
-async function migrateExistingDeptCounts() {
+// Backfill dept_counts + products for old rows
+async function migrateExisting() {
   const rows = await db
-    .select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber })
-    .from(ordersTable)
-    .where(isNull(ordersTable.departmentCounts));
+    .select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber, departmentCounts: ordersTable.departmentCounts })
+    .from(ordersTable);
 
   for (const row of rows) {
-    const counts = SEED_DEPT_COUNTS[row.orderNumber] ?? { "02": 1 };
-    await db
-      .update(ordersTable)
-      .set({ departmentCounts: JSON.stringify(counts) })
-      .where(eq(ordersTable.id, row.id));
+    const counts = row.departmentCounts
+      ? JSON.parse(row.departmentCounts) as Record<string, number>
+      : (SEED_DEPT_COUNTS[row.orderNumber] ?? { "02": 1 });
+
+    const patch: Record<string, string> = {};
+    if (!row.departmentCounts) patch.department_counts = JSON.stringify(counts);
+    patch.products = JSON.stringify(generateProducts(counts));
+
+    await db.execute(
+      sql`UPDATE orders SET
+        department_counts = COALESCE(department_counts, ${JSON.stringify(counts)}),
+        products = ${patch.products}
+        WHERE id = ${row.id}`
+    );
   }
 }
 
-// Re-assign all orders (or only unassigned ones) based on department_counts
+// Re-assign unassigned orders (or all if onlyUnassigned=false)
 async function runAutoAssign(onlyUnassigned = false) {
   const rows = await db
     .select({
@@ -224,50 +339,17 @@ async function init() {
   initialised = true;
   await ensureTable();
   await seedIfEmpty();
-  await migrateExistingDeptCounts();
-  await runAutoAssign(true); // only assign orders that don't yet have a picker
+  await migrateExisting();
+  await runAutoAssign(true);
 }
 
-// ── Routes ────────────────────────────────────────────────────────────
+// ── Routes (literal paths before param routes) ────────────────────────
 
-// GET /api/orders — filterable by branchCode, status, pickerId
-router.get("/", async (req, res) => {
+// GET /api/orders/branches
+router.get("/branches", async (_req, res) => {
   try {
     await init();
-    const { branchCode, status, pickerId } = req.query;
-
-    const conditions = [];
-    if (branchCode && branchCode !== "ALL") {
-      conditions.push(eq(ordersTable.branchCode, branchCode as string));
-    }
-    if (status) {
-      conditions.push(eq(ordersTable.status, status as string));
-    }
-    if (pickerId) {
-      conditions.push(eq(ordersTable.assignedPickerId, pickerId as string));
-    }
-
-    const rows = await db
-      .select()
-      .from(ordersTable)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(ordersTable.receivedAt));
-
-    res.json(rows);
-  } catch (err) {
-    console.error("Orders GET error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// GET /api/orders/branches — distinct branch codes
-router.get("/branches", async (req, res) => {
-  try {
-    await init();
-    const rows = await db
-      .selectDistinct({ branchCode: ordersTable.branchCode })
-      .from(ordersTable)
-      .orderBy(ordersTable.branchCode);
+    const rows = await db.selectDistinct({ branchCode: ordersTable.branchCode }).from(ordersTable).orderBy(ordersTable.branchCode);
     res.json(rows.map((r) => r.branchCode));
   } catch (err) {
     console.error("Orders branches error:", err);
@@ -275,8 +357,76 @@ router.get("/branches", async (req, res) => {
   }
 });
 
-// POST /api/orders/assign — re-run assignment for all unassigned orders
-router.post("/assign", async (req, res) => {
+// GET /api/orders/pickers?branchCode=X — active Order Pickers for a branch
+router.get("/pickers", async (req, res) => {
+  try {
+    await init();
+    const { branchCode } = req.query;
+    const pickers = await db
+      .select({
+        username: usersTable.username,
+        forenames: usersTable.forenames,
+        surname: usersTable.surname,
+        branchCode: usersTable.branchCode,
+        department: usersTable.department,
+      })
+      .from(usersTable)
+      .where(and(eq(usersTable.rights, "Order Picker"), eq(usersTable.isActive, true)));
+
+    const filtered = branchCode && branchCode !== "ALL"
+      ? pickers.filter((p) => p.branchCode === branchCode || p.branchCode === "ALL")
+      : pickers;
+
+    res.json(filtered.map((p) => ({
+      username: p.username,
+      fullName: `${p.forenames} ${p.surname}`,
+      branchCode: p.branchCode,
+      department: p.department,
+    })));
+  } catch (err) {
+    console.error("Orders pickers error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/orders — filterable by branchCode, status, pickerId
+router.get("/", async (req, res) => {
+  try {
+    await init();
+    const { branchCode, status, pickerId } = req.query;
+    const conditions = [];
+    if (branchCode && branchCode !== "ALL") conditions.push(eq(ordersTable.branchCode, branchCode as string));
+    if (status) conditions.push(eq(ordersTable.status, status as string));
+    if (pickerId) conditions.push(eq(ordersTable.assignedPickerId, pickerId as string));
+    const rows = await db.select().from(ordersTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(ordersTable.receivedAt));
+    res.json(rows);
+  } catch (err) {
+    console.error("Orders GET error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/orders/:orderNumber — full detail including parsed products
+router.get("/:orderNumber", async (req, res) => {
+  try {
+    await init();
+    const { orderNumber } = req.params;
+    const rows = await db.select().from(ordersTable).where(eq(ordersTable.orderNumber, orderNumber)).limit(1);
+    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    const row = rows[0];
+    let products: ProductLine[] = [];
+    try { if (row.products) products = JSON.parse(row.products); } catch {}
+    res.json({ ...row, products });
+  } catch (err) {
+    console.error("Orders detail error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/orders/assign — re-run auto-assignment for unassigned orders
+router.post("/assign", async (_req, res) => {
   try {
     await init();
     await runAutoAssign(true);
@@ -287,35 +437,38 @@ router.post("/assign", async (req, res) => {
   }
 });
 
-// PATCH /api/orders/:orderNumber/status — advance order status
+// POST /api/orders/:orderNumber/reassign — manual reassignment by manager
+router.post("/:orderNumber/reassign", async (req, res) => {
+  try {
+    await init();
+    const { orderNumber } = req.params;
+    const { pickerId, pickerName } = req.body as { pickerId: string; pickerName: string };
+    if (!pickerId || !pickerName) return res.status(400).json({ error: "pickerId and pickerName required" });
+    await db.update(ordersTable)
+      .set({ assignedPickerId: pickerId, assignedPickerName: pickerName })
+      .where(eq(ordersTable.orderNumber, orderNumber));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Orders reassign error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/orders/:orderNumber/status
 router.patch("/:orderNumber/status", async (req, res) => {
   try {
     await init();
     const { orderNumber } = req.params;
     const { status } = req.body as { status: string };
-
     const validStatuses = ["received", "picking", "picked", "dispatched"];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
-    }
-
+    if (!validStatuses.includes(status)) return res.status(400).json({ error: "Invalid status" });
     const now = new Date();
-    type OrderPatch = {
-      status: string;
-      pickingStartedAt?: Date;
-      pickedAt?: Date;
-      dispatchedAt?: Date;
-    };
+    type OrderPatch = { status: string; pickingStartedAt?: Date; pickedAt?: Date; dispatchedAt?: Date };
     const patch: OrderPatch = { status };
-    if (status === "picking")   patch.pickingStartedAt = now;
-    if (status === "picked")    patch.pickedAt = now;
+    if (status === "picking")    patch.pickingStartedAt = now;
+    if (status === "picked")     patch.pickedAt = now;
     if (status === "dispatched") patch.dispatchedAt = now;
-
-    await db
-      .update(ordersTable)
-      .set(patch)
-      .where(eq(ordersTable.orderNumber, orderNumber));
-
+    await db.update(ordersTable).set(patch).where(eq(ordersTable.orderNumber, orderNumber));
     res.json({ ok: true });
   } catch (err) {
     console.error("Orders status patch error:", err);
