@@ -184,6 +184,11 @@ export default function SetupStoreLayout() {
   const [pendingRect, setPendingRect] = useState<PendingRect | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formProducts, setFormProducts] = useState<ProductEntry[]>([{ dept: "", category: "", colour: "", description: "", productCode: "" }]);
+  const [editingRailId, setEditingRailId] = useState<string | null>(null);
+
+  // Hover state for rail label tooltip
+  const [hoveredRail, setHoveredRail] = useState<Rail | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
   const isAdmin = user?.isAdmin === true;
@@ -295,14 +300,55 @@ export default function SetupStoreLayout() {
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawMode || !drawingRef.current || showForm) return;
       const { x, y } = getCanvasPos(e);
-      drawingRef.current = { ...drawingRef.current, cx: x, cy: y };
-      const canvas = canvasRef.current;
-      if (canvas) redrawCanvas(canvas, rails, drawingRef.current, pendingRect);
+
+      // While actively drawing, update the preview rect
+      if (isDrawMode && drawingRef.current && !showForm) {
+        drawingRef.current = { ...drawingRef.current, cx: x, cy: y };
+        const canvas = canvasRef.current;
+        if (canvas) redrawCanvas(canvas, rails, drawingRef.current, pendingRect);
+        setHoveredRail(null);
+        return;
+      }
+
+      // Hover detection over rail labels (only when not drawing / no form open)
+      if (!isDrawMode && !showForm) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const W = canvas.width;
+        const H = canvas.height;
+        const LABEL_H = 23; // approx label height (fontSize 11 + padding*2)
+        const container = containerRef.current;
+        const containerRect = container?.getBoundingClientRect();
+
+        let found: Rail | null = null;
+        for (const rail of rails) {
+          const rx = rail.x * W;
+          const ry = rail.y * H;
+          const rw = rail.w * W;
+          if (x >= rx && x <= rx + rw && y >= ry && y <= ry + LABEL_H) {
+            found = rail;
+            break;
+          }
+        }
+        setHoveredRail(found);
+        if (found && containerRect) {
+          // Convert canvas coords back to container-relative px
+          const scaleX = canvas.width / canvas.getBoundingClientRect().width;
+          const scaleY = canvas.height / canvas.getBoundingClientRect().height;
+          setHoverPos({
+            x: (x / scaleX),
+            y: (y / scaleY),
+          });
+        }
+      }
     },
     [isDrawMode, rails, pendingRect, showForm],
   );
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredRail(null);
+  }, []);
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -338,6 +384,31 @@ export default function SetupStoreLayout() {
     [isDrawMode, rails, pendingRect, showForm],
   );
 
+  function handleEditRail(rail: Rail) {
+    setHoveredRail(null);
+    // Pre-populate form from the rail's saved products (fall back to flat fields for older data)
+    if (rail.products && rail.products.length > 0) {
+      setFormProducts(rail.products.map((p) => ({
+        productCode: p.productCode ?? "",
+        dept: p.dept ?? "",
+        category: p.category ?? "",
+        colour: p.colour ?? "",
+        description: p.description ?? "",
+      })));
+    } else {
+      setFormProducts([{
+        productCode: "",
+        dept: rail.department ?? "",
+        category: rail.category ?? "",
+        colour: rail.colour ?? "",
+        description: rail.description ?? "",
+      }]);
+    }
+    setEditingRailId(rail.id);
+    setPendingRect({ x: rail.x, y: rail.y, w: rail.w, h: rail.h });
+    setShowForm(true);
+  }
+
   function updateProduct(i: number, field: keyof ProductEntry, value: string) {
     setFormProducts((prev) => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
   }
@@ -363,7 +434,8 @@ export default function SetupStoreLayout() {
     if (!pendingRect) return;
 
     const first = formProducts[0];
-    const newId = generateRailId(first.dept, first.category, first.colour, rails);
+    // Keep the same Rail ID when editing; generate a new one when creating
+    const newId = editingRailId ?? generateRailId(first.dept, first.category, first.colour, rails.filter((r) => r.id !== editingRailId));
     const newRail: Rail = {
       id: newId,
       x: pendingRect.x,
@@ -377,10 +449,13 @@ export default function SetupStoreLayout() {
       products: formProducts.map((p) => ({ dept: p.dept.trim(), category: p.category.trim(), colour: p.colour.trim(), description: p.description.trim(), productCode: p.productCode.trim() })),
     };
 
-    const updated = [...rails, newRail];
+    const updated = editingRailId
+      ? rails.map((r) => r.id === editingRailId ? newRail : r)
+      : [...rails, newRail];
     setRails(updated);
     setPendingRect(null);
     setShowForm(false);
+    setEditingRailId(null);
 
     const canvas = canvasRef.current;
     if (canvas) redrawCanvas(canvas, updated, null, null);
@@ -389,6 +464,7 @@ export default function SetupStoreLayout() {
   function handleFormCancel() {
     setPendingRect(null);
     setShowForm(false);
+    setEditingRailId(null);
     drawingRef.current = null;
     const canvas = canvasRef.current;
     if (canvas) redrawCanvas(canvas, rails, null, null);
@@ -621,14 +697,61 @@ export default function SetupStoreLayout() {
               inset: 0,
               width: "100%",
               height: "100%",
-              cursor: isDrawMode && !showForm ? "crosshair" : "default",
-              pointerEvents: isDrawMode && !showForm ? "all" : "none",
+              cursor: isDrawMode && !showForm ? "crosshair" : hoveredRail ? "pointer" : "default",
+              pointerEvents: "all",
             }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={(e) => { if (drawingRef.current) handleMouseUp(e as React.MouseEvent<HTMLCanvasElement>); }}
+            onMouseLeave={(e) => {
+              handleMouseLeave();
+              if (drawingRef.current) handleMouseUp(e as React.MouseEvent<HTMLCanvasElement>);
+            }}
           />
+
+          {/* Rail label hover tooltip */}
+          {hoveredRail && !showForm && !isDrawMode && (
+            <div
+              style={{
+                position: "absolute",
+                left: hoverPos.x + 8,
+                top: hoverPos.y + 28,
+                background: "#1a1a2e",
+                border: "1px solid #4a9eda",
+                borderRadius: 8,
+                padding: "0.5rem 0.75rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                pointerEvents: "auto",
+                zIndex: 100,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={() => setHoveredRail(hoveredRail)}
+              onMouseLeave={() => setHoveredRail(null)}
+            >
+              <span style={{ fontSize: "0.82rem", color: "#aad4f5", fontWeight: 600 }}>
+                {hoveredRail.id}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleEditRail(hoveredRail)}
+                style={{
+                  background: "#4a9eda",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "0.25rem 0.75rem",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Edit
+              </button>
+            </div>
+          )}
         </div>
 
         {rails.length > 0 && (
@@ -703,11 +826,13 @@ export default function SetupStoreLayout() {
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #333", paddingBottom: "0.75rem" }}>
               <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#fff" }}>
-                Rail Details
+                {editingRailId ? `Edit Rail — ${editingRailId}` : "Rail Details"}
               </h2>
             </div>
             <p style={{ margin: 0, fontSize: "0.82rem", color: "#999" }}>
-              Fill in the details for each product on this rail. The Rail ID is generated from the first product when you save.
+              {editingRailId
+                ? "Update the product details below. The Rail ID will remain unchanged."
+                : "Fill in the details for each product on this rail. The Rail ID is generated from the first product when you save."}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "55vh", overflowY: "auto", paddingRight: "0.25rem" }}>
