@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { LiveClock } from "@/components/LiveClock";
 import { OrderDetailModal } from "@/components/OrderDetailModal";
@@ -122,6 +122,28 @@ export default function PickOrders() {
   // Modal state
   const [detailOrder, setDetailOrder] = useState<string | null>(null);
 
+  // Focus order — passed via ?focus=ORD-XXX when arriving from "Pick Order" button
+  const [focusOrder] = useState<string | null>(() => {
+    try { return new URLSearchParams(window.location.search).get("focus"); }
+    catch { return null; }
+  });
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+
+  const canPickOrder = user?.designation === "Store Manager"
+    || user?.designation === "Store Supervisor";
+
+  // If arriving from "Pick Order", pre-filter to "picking"
+  useEffect(() => {
+    if (focusOrder) setStatusFilter("picking");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll to and flash the focused row after orders load
+  useEffect(() => {
+    if (!focusOrder || orders.length === 0) return;
+    const el = rowRefs.current[focusOrder];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [orders, focusOrder]);
+
   // Branch setup for non-picker roles
   useEffect(() => {
     if (isOrderPicker) return;
@@ -234,6 +256,26 @@ export default function PickOrders() {
         {" / Pick Orders"}
       </div>
 
+      {/* Focus banner — shown when arriving from "Pick Order" button */}
+      {focusOrder && (
+        <div style={{
+          margin: "0.5rem 1.5rem 0",
+          background: "rgba(80,210,120,0.08)", border: "1px solid rgba(80,210,120,0.28)",
+          borderRadius: 10, padding: "0.7rem 1.1rem",
+          display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: "1.1rem" }}>🟢</span>
+          <div>
+            <div style={{ color: "#50d278", fontWeight: 700, fontSize: "0.9rem" }}>
+              You are now picking order <span style={{ fontFamily: "monospace" }}>{focusOrder}</span>
+            </div>
+            <div style={{ color: "#557755", fontSize: "0.78rem", marginTop: 2 }}>
+              The order is highlighted below. Use the action button on the row to advance it when ready.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ flex: 1, padding: "1rem 1.5rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
         {/* Filters for non-pickers */}
@@ -336,7 +378,7 @@ export default function PickOrders() {
                   <th style={thStyle}>Pick Duration</th>
                   <th style={thStyle}>Comment</th>
                   <th style={thStyle}>Dispatched</th>
-                  <th style={thStyle}>{isOrderPicker ? "Action" : ""}</th>
+                  <th style={thStyle}>{(isOrderPicker || canPickOrder) ? "Action" : ""}</th>
                 </tr>
               </thead>
               <tbody>
@@ -346,8 +388,21 @@ export default function PickOrders() {
                   const rating = pickRating(pickMinsRaw, o.itemCount);
                   const next = NEXT_STATUS[o.status];
                   const isAdvancing = advancing.has(o.orderNumber);
+                  const isFocused = o.orderNumber === focusOrder;
+                  const isSelfPicking = canPickOrder && o.assignedPickerId === user?.username
+                    && (o.status === "picking" || o.status === "picked");
                   return (
-                    <tr key={o.id} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
+                    <tr
+                      key={o.id}
+                      ref={(el) => { rowRefs.current[o.orderNumber] = el; }}
+                      style={{
+                        background: isFocused
+                          ? "rgba(80,210,120,0.09)"
+                          : i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)",
+                        outline: isFocused ? "1.5px solid rgba(80,210,120,0.4)" : "none",
+                        outlineOffset: -1,
+                      }}
+                    >
                       {/* Clickable order number */}
                       <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
                         <button
@@ -401,6 +456,27 @@ export default function PickOrders() {
                             </button>
                           )}
                           {isOrderPicker && !next && (
+                            <span style={{ color: "#2a5a2a", fontSize: "0.78rem", fontWeight: 700 }}>✓ Done</span>
+                          )}
+                          {/* Self-picking action for manager/supervisor */}
+                          {isSelfPicking && next && (
+                            <button
+                              type="button"
+                              disabled={isAdvancing}
+                              onClick={() => advanceStatus(o.orderNumber, next.next)}
+                              style={{
+                                background: isFocused ? "#1a4a2a" : "#1a4a1a",
+                                border: `1px solid ${isFocused ? "#2a7a3a" : "#2a7a2a"}`,
+                                color: "#50d278", padding: "0.3rem 0.75rem", borderRadius: 6,
+                                fontSize: "0.78rem", fontWeight: 700,
+                                cursor: isAdvancing ? "not-allowed" : "pointer",
+                                opacity: isAdvancing ? 0.6 : 1, whiteSpace: "nowrap",
+                              }}
+                            >
+                              {isAdvancing ? "…" : next.label}
+                            </button>
+                          )}
+                          {isSelfPicking && !next && (
                             <span style={{ color: "#2a5a2a", fontSize: "0.78rem", fontWeight: 700 }}>✓ Done</span>
                           )}
                           {/* Reassign button for managers */}

@@ -143,7 +143,7 @@ export default function ViewOrders() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "picking" }),
       });
-      setLocation("/pick-orders");
+      setLocation(`/pick-orders?focus=${orderNumber}`);
     } catch {
       alert("Failed to start picking. Please try again.");
     } finally {
