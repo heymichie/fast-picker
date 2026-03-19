@@ -191,6 +191,7 @@ export default function SetupStoreLayout() {
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
+  const hoverClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAdmin = user?.isAdmin === true;
 
   // ── Canvas resize sync ─────────────────────────────────────────────
@@ -346,9 +347,18 @@ export default function SetupStoreLayout() {
     [isDrawMode, rails, pendingRect, showForm],
   );
 
-  const handleMouseLeave = useCallback(() => {
-    setHoveredRail(null);
+  const scheduleHoverClear = useCallback(() => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+    hoverClearTimer.current = setTimeout(() => setHoveredRail(null), 150);
   }, []);
+
+  const cancelHoverClear = useCallback(() => {
+    if (hoverClearTimer.current) clearTimeout(hoverClearTimer.current);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    scheduleHoverClear();
+  }, [scheduleHoverClear]);
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -728,8 +738,8 @@ export default function SetupStoreLayout() {
                 boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
                 whiteSpace: "nowrap",
               }}
-              onMouseEnter={() => setHoveredRail(hoveredRail)}
-              onMouseLeave={() => setHoveredRail(null)}
+              onMouseEnter={cancelHoverClear}
+              onMouseLeave={scheduleHoverClear}
             >
               <span style={{ fontSize: "0.82rem", color: "#aad4f5", fontWeight: 600 }}>
                 {hoveredRail.id}
