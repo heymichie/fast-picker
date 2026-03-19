@@ -16,7 +16,10 @@ router.get("/", async (req, res) => {
       .from(storeLayoutsTable)
       .where(eq(storeLayoutsTable.branchCode, branchCode as string));
 
-    res.json({ floorPlanImage: layout?.floorPlanImage ?? null });
+    res.json({
+      floorPlanImage: layout?.floorPlanImage ?? null,
+      railsData: layout?.railsData ? JSON.parse(layout.railsData) : [],
+    });
   } catch (err) {
     console.error("Store layout GET error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -25,7 +28,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { branchCode, floorPlanImage } = req.body;
+    const { branchCode, floorPlanImage, railsData } = req.body;
     if (!branchCode) {
       res.status(400).json({ error: "branchCode is required" });
       return;
@@ -33,10 +36,18 @@ router.post("/", async (req, res) => {
 
     await db
       .insert(storeLayoutsTable)
-      .values({ branchCode, floorPlanImage })
+      .values({
+        branchCode,
+        floorPlanImage: floorPlanImage ?? null,
+        railsData: railsData !== undefined ? JSON.stringify(railsData) : null,
+      })
       .onConflictDoUpdate({
         target: storeLayoutsTable.branchCode,
-        set: { floorPlanImage, updatedAt: new Date() },
+        set: {
+          floorPlanImage: floorPlanImage ?? null,
+          railsData: railsData !== undefined ? JSON.stringify(railsData) : null,
+          updatedAt: new Date(),
+        },
       });
 
     res.json({ ok: true });
