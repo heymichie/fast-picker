@@ -312,6 +312,36 @@ export default function ManageStoreLayout() {
     setTimeout(() => { win.print(); }, 600);
   }
 
+  function downloadFloorPlan() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `FloorPlan_${selectedBranch}_${selectedFloor}.png`.replace(/\s+/g, "_");
+    a.click();
+  }
+
+  function downloadRailInfo() {
+    if (!rails.length) return;
+    const rows = [["Rail ID", "Product Code", "Department", "Category", "Colour", "Description"]];
+    for (const rail of rails) {
+      const products = rail.products?.length
+        ? rail.products
+        : [{ productCode: "", dept: rail.department, category: rail.category, colour: rail.colour, description: rail.description }];
+      for (const p of products) {
+        rows.push([rail.id, p.productCode || "", p.dept || "", p.category || "", p.colour || "", p.description || ""]);
+      }
+    }
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `RailInfo_${selectedBranch}_${selectedFloor}.csv`.replace(/\s+/g, "_");
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function printBoth() {
     const canvas = canvasRef.current;
     const dataUrl = canvas ? canvas.toDataURL("image/png") : null;
@@ -402,19 +432,36 @@ export default function ManageStoreLayout() {
               <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#fff" }}>{selectedBranch} — {selectedFloor}</h2>
               <span style={{ fontSize: "0.82rem", color: "#555", flex: 1 }}>{rails.length} rail{rails.length !== 1 ? "s" : ""}</span>
               {hasFloorContent && (
-                <button
-                  type="button"
-                  onClick={printBoth}
-                  title="Print floor plan and rail information"
-                  style={{
-                    display: "flex", alignItems: "center", gap: "0.4rem",
-                    background: "#4a9eda", border: "none", color: "#fff",
-                    padding: "0.42rem 1rem", borderRadius: 8,
-                    fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                  }}
-                >
-                  🖨 Print Both
-                </button>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={printBoth}
+                    title="Print floor plan and rail information"
+                    style={{
+                      display: "flex", alignItems: "center", gap: "0.35rem",
+                      background: "#4a9eda", border: "none", color: "#fff",
+                      padding: "0.38rem 0.85rem", borderRadius: 8,
+                      fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                    }}
+                  >
+                    🖨 Print Both
+                  </button>
+                  {floorPlanSrc && rails.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { downloadFloorPlan(); setTimeout(downloadRailInfo, 200); }}
+                      title="Download floor plan (PNG) and rail info (CSV)"
+                      style={{
+                        display: "flex", alignItems: "center", gap: "0.35rem",
+                        background: "transparent", border: "1px solid #4a9eda", color: "#4a9eda",
+                        padding: "0.38rem 0.85rem", borderRadius: 8,
+                        fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >
+                      ⬇ Download Both
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -425,17 +472,30 @@ export default function ManageStoreLayout() {
                   <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ccc" }}>Floor Plan</span>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                     {floorPlanSrc && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); printFloorPlan(); }}
-                        style={{
-                          background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda",
-                          color: "#4a9eda", padding: "0.22rem 0.65rem", borderRadius: 6,
-                          fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                        }}
-                      >
-                        🖨 Print
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); printFloorPlan(); }}
+                          style={{
+                            background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda",
+                            color: "#4a9eda", padding: "0.22rem 0.65rem", borderRadius: 6,
+                            fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                          }}
+                        >
+                          🖨 Print
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); downloadFloorPlan(); }}
+                          style={{
+                            background: "rgba(74,158,218,0.1)", border: "1px solid #4a9eda",
+                            color: "#4a9eda", padding: "0.22rem 0.65rem", borderRadius: 6,
+                            fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                          }}
+                        >
+                          ⬇ Download
+                        </button>
+                      </>
                     )}
                     <span style={{ fontSize: "0.8rem", color: "#555" }}>{planOpen ? "▲ Collapse" : "▼ Expand"}</span>
                   </div>
@@ -469,6 +529,17 @@ export default function ManageStoreLayout() {
                       }}
                     >
                       🖨 Print
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); downloadRailInfo(); }}
+                      style={{
+                        background: "rgba(74,158,218,0.1)", border: "1px solid #4a9eda",
+                        color: "#4a9eda", padding: "0.22rem 0.65rem", borderRadius: 6,
+                        fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >
+                      ⬇ Download CSV
                     </button>
                     <span style={{ fontSize: "0.8rem", color: "#555" }}>{tableOpen ? "▲ Collapse" : "▼ Expand"}</span>
                   </div>

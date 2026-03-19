@@ -546,6 +546,138 @@ export default function SetupStoreLayout() {
     drawingRef.current = null;
   }
 
+  // ── Print / Download helpers ──────────────────────────────────────
+  async function getCompositeDataUrl(): Promise<string | null> {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const W = canvas.width || 620;
+    const H = canvas.height || Math.round(W * 3 / 4);
+    const offscreen = document.createElement("canvas");
+    offscreen.width = W; offscreen.height = H;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return null;
+    if (floorPlanSrc) {
+      const img = new Image();
+      img.src = floorPlanSrc;
+      await new Promise<void>((res) => { img.onload = () => res(); img.onerror = () => res(); });
+      ctx.drawImage(img, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = "#a0a0a0"; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.drawImage(canvas, 0, 0);
+    return offscreen.toDataURL("image/png");
+  }
+
+  function buildRailTableHtml(): string {
+    const rowsHtml = rails.map((rail) => {
+      const products = rail.products?.length
+        ? rail.products
+        : [{ productCode: "", dept: rail.department, category: rail.category, colour: rail.colour, description: rail.description }];
+      return products.map((p, pi) => `<tr>
+        ${pi === 0 ? `<td rowspan="${products.length}" style="vertical-align:middle;font-weight:700;font-family:monospace;font-size:11px;color:#1a2a3a;">${rail.id}</td>` : ""}
+        <td style="font-family:monospace;font-size:11px;">${p.productCode || "—"}</td>
+        <td>${p.dept || "—"}</td><td>${p.category || "—"}</td>
+        <td>${p.colour || "—"}</td><td>${p.description || "—"}</td>
+      </tr>`).join("");
+    }).join("");
+    const thS = `text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;`;
+    return `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr>
+        <th style="${thS}">Rail ID</th><th style="${thS}">Product Code</th>
+        <th style="${thS}">Department</th><th style="${thS}">Category</th>
+        <th style="${thS}">Colour</th><th style="${thS}">Description</th>
+      </tr></thead><tbody>${rowsHtml}</tbody></table>`;
+  }
+
+  async function printFloorPlan() {
+    const dataUrl = await getCompositeDataUrl();
+    if (!dataUrl) return;
+    const title = `Floor Plan — ${selectedBranch} / ${floorName}`;
+    const win = window.open("", "_blank"); if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;background:#fff;font-family:Arial,sans-serif;}
+      h2{font-size:15px;color:#333;margin:0 0 10px;}p{font-size:11px;color:#888;margin:0 0 12px;}
+      img{max-width:100%;border:1px solid #ddd;border-radius:6px;}
+      @media print{@page{margin:1.5cm;}body{padding:0;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      <img src="${dataUrl}" /></body></html>`);
+    win.document.close(); win.focus(); setTimeout(() => win.print(), 600);
+  }
+
+  function printRailInfo() {
+    if (!rails.length) return;
+    const title = `Rail Information — ${selectedBranch} / ${floorName}`;
+    const win = window.open("", "_blank"); if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#fff;color:#222;}
+      h2{font-size:15px;color:#333;margin:0 0 6px;}p{font-size:11px;color:#888;margin:0 0 14px;}
+      td,th{padding:7px 10px;border-bottom:1px solid #e8e8e8;vertical-align:top;}
+      tr:nth-child(even) td{background:#f6faff;}
+      @media print{@page{margin:1.5cm;size:landscape;}body{padding:0;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>${rails.length} rail${rails.length !== 1 ? "s" : ""} · Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      ${buildRailTableHtml()}</body></html>`);
+    win.document.close(); win.focus(); setTimeout(() => win.print(), 600);
+  }
+
+  async function printBoth() {
+    const dataUrl = await getCompositeDataUrl();
+    const title = `Store Layout — ${selectedBranch} / ${floorName}`;
+    const win = window.open("", "_blank"); if (!win) return;
+    const imgSec = dataUrl
+      ? `<h3 style="font-size:13px;color:#333;margin:0 0 8px;">Floor Plan</h3><img src="${dataUrl}" style="max-width:100%;border:1px solid #ddd;border-radius:6px;" />`
+      : "";
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#fff;color:#222;}
+      h2{font-size:15px;margin:0 0 6px;}h3{font-size:13px;margin:22px 0 8px;}
+      p{font-size:11px;color:#888;margin:0 0 14px;}
+      td,th{padding:7px 10px;border-bottom:1px solid #e8e8e8;vertical-align:top;}
+      tr:nth-child(even) td{background:#f6faff;}
+      @media print{@page{margin:1.5cm;}body{padding:0;}.pb{page-break-before:always;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      ${imgSec}
+      ${rails.length > 0 ? `<div class="pb"><h3>Rail Information</h3><p>${rails.length} rail${rails.length !== 1 ? "s" : ""}</p>${buildRailTableHtml()}</div>` : ""}
+    </body></html>`);
+    win.document.close(); win.focus(); setTimeout(() => win.print(), 600);
+  }
+
+  async function downloadFloorPlan() {
+    const dataUrl = await getCompositeDataUrl();
+    if (!dataUrl) return;
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `FloorPlan_${selectedBranch}_${floorName}.png`.replace(/\s+/g, "_");
+    a.click();
+  }
+
+  function downloadRailInfo() {
+    if (!rails.length) return;
+    const rows = [["Rail ID", "Product Code", "Department", "Category", "Colour", "Description"]];
+    for (const rail of rails) {
+      const products = rail.products?.length
+        ? rail.products
+        : [{ productCode: "", dept: rail.department, category: rail.category, colour: rail.colour, description: rail.description }];
+      for (const p of products) {
+        rows.push([rail.id, p.productCode || "", p.dept || "", p.category || "", p.colour || "", p.description || ""]);
+      }
+    }
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `RailInfo_${selectedBranch}_${floorName}.csv`.replace(/\s+/g, "_");
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const hasContent = !!(floorPlanSrc || rails.length > 0);
+
   const btnStyle: React.CSSProperties = {
     background: "#fff",
     color: "#111",
@@ -777,6 +909,42 @@ export default function SetupStoreLayout() {
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
+
+      {/* ── Print / Download row ──────────────────────────────────────── */}
+      {hasContent && selectedBranch && (
+        <div style={{ display: "flex", gap: "0.6rem", padding: "0 1.5rem 0.25rem", justifyContent: "center", flexWrap: "wrap" }}>
+          {floorPlanSrc && (
+            <>
+              <button type="button" onClick={printFloorPlan}
+                style={{ background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda", color: "#4a9eda", padding: "0.32rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                🖨 Print Floor Plan
+              </button>
+              <button type="button" onClick={downloadFloorPlan}
+                style={{ background: "rgba(74,158,218,0.08)", border: "1px solid #4a9eda", color: "#4a9eda", padding: "0.32rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                ⬇ Download Floor Plan
+              </button>
+            </>
+          )}
+          {rails.length > 0 && (
+            <>
+              <button type="button" onClick={printRailInfo}
+                style={{ background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda", color: "#4a9eda", padding: "0.32rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                🖨 Print Rail Info
+              </button>
+              <button type="button" onClick={downloadRailInfo}
+                style={{ background: "rgba(74,158,218,0.08)", border: "1px solid #4a9eda", color: "#4a9eda", padding: "0.32rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                ⬇ Download Rail CSV
+              </button>
+            </>
+          )}
+          {floorPlanSrc && rails.length > 0 && (
+            <button type="button" onClick={printBoth}
+              style={{ background: "#4a9eda", border: "none", color: "#fff", padding: "0.32rem 0.85rem", borderRadius: 7, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+              🖨 Print Both
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Action buttons ────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: "1.5rem", padding: "1.25rem 1.5rem 2.5rem", justifyContent: "center", flexWrap: "wrap" }}>
