@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { LiveClock } from "@/components/LiveClock";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 function getStoredUser() {
   try {
     const raw = localStorage.getItem("fp_user");
@@ -66,15 +64,27 @@ export default function Reports() {
   const isAdmin = user?.isAdmin === true;
 
   useEffect(() => {
-    if (isAdmin) {
-      fetch(`${BASE}/api/accounts/branches`)
-        .then((r) => r.json())
-        .then((data: string[]) => setBranches(data))
-        .catch(() => setBranches([]));
-    } else if (user?.branchCode && user.branchCode !== "ALL") {
-      setBranches([user.branchCode]);
-      setSelectedBranch(user.branchCode);
-    }
+    // Always fetch live from the database so new branches appear automatically
+    fetch("/api/accounts/branches")
+      .then((r) => r.json())
+      .then((data: string[]) => {
+        if (isAdmin) {
+          // Administrators see all branches across all users
+          setBranches(data);
+        } else if (user?.branchCode && user.branchCode !== "ALL") {
+          // Non-admins are limited to their own assigned branch
+          const myBranch = user.branchCode;
+          setBranches(data.includes(myBranch) ? [myBranch] : [myBranch]);
+          setSelectedBranch(myBranch);
+        }
+      })
+      .catch(() => {
+        // Fallback to localStorage value if API is unavailable
+        if (!isAdmin && user?.branchCode && user.branchCode !== "ALL") {
+          setBranches([user.branchCode]);
+          setSelectedBranch(user.branchCode);
+        }
+      });
   }, []);
 
   function toggleCheck(key: string) {
