@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
@@ -36,10 +36,20 @@ export default function CreateAccount() {
   const [surname, setSurname] = useState("");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [department, setDepartment] = useState("");
+  const [customDept, setCustomDept] = useState("");
+  const [departments, setDepartments] = useState<string[]>([]);
   const [rights, setRights] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/store-layout/departments")
+      .then((r) => r.json())
+      .then((data: string[]) => setDepartments(Array.isArray(data) ? data : []))
+      .catch(() => setDepartments([]));
+  }, []);
 
   const currentUser = getStoredUser();
   const createdByName = currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "System";
@@ -67,6 +77,7 @@ export default function CreateAccount() {
 
     setIsSubmitting(true);
     try {
+      const effectiveDept = department === "Other" ? customDept.trim() : department;
       const res = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -76,6 +87,7 @@ export default function CreateAccount() {
           surname: surname.trim(),
           employeeNumber: employeeNumber.trim() || null,
           email: email.trim() || null,
+          department: effectiveDept || null,
           rights,
           branchCode: effectiveBranch,
           createdBy: createdByName,
@@ -289,9 +301,44 @@ export default function CreateAccount() {
               </td>
             </tr>
 
+            {/* Department */}
+            <tr>
+              <td style={cellStyle(true)}>Department</td>
+              <td style={cellStyle(true)}>
+                <select
+                  value={department}
+                  onChange={(e) => { setDepartment(e.target.value); if (e.target.value !== "Other") setCustomDept(""); }}
+                  style={{
+                    ...inputStyle,
+                    appearance: "auto",
+                    WebkitAppearance: "auto",
+                    background: "transparent",
+                    cursor: "pointer",
+                    paddingBottom: "2px",
+                  }}
+                >
+                  <option value="">— Select department —</option>
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                  <option value="Other">Other (type below)</option>
+                </select>
+                {department === "Other" && (
+                  <input
+                    type="text"
+                    value={customDept}
+                    onChange={(e) => setCustomDept(e.target.value)}
+                    placeholder="Enter department name"
+                    style={{ ...inputStyle, marginTop: 8 }}
+                    autoFocus
+                  />
+                )}
+              </td>
+            </tr>
+
             {/* Rights */}
             <tr>
-              <td style={cellStyle(true)}>Rights</td>
+              <td style={cellStyle(false)}>Rights</td>
               <td style={cellStyle(true)}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {RIGHTS.map((r) => (

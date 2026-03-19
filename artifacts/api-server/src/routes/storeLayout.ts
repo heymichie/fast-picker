@@ -52,6 +52,41 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Return all unique department names found across all saved rail data
+router.get("/departments", async (_req, res) => {
+  try {
+    const layouts = await db
+      .select({ railsData: storeLayoutsTable.railsData })
+      .from(storeLayoutsTable);
+
+    const depts = new Set<string>();
+
+    for (const layout of layouts) {
+      if (!layout.railsData) continue;
+      const rails = JSON.parse(layout.railsData) as Array<{
+        department?: string;
+        products?: Array<{ dept?: string }>;
+      }>;
+      for (const rail of rails) {
+        if (rail.products && rail.products.length > 0) {
+          for (const p of rail.products) {
+            if (p.dept) {
+              p.dept.split(" / ").forEach((d) => { const t = d.trim(); if (t) depts.add(t); });
+            }
+          }
+        } else if (rail.department) {
+          rail.department.split(" / ").forEach((d) => { const t = d.trim(); if (t) depts.add(t); });
+        }
+      }
+    }
+
+    res.json([...depts].sort());
+  } catch (err) {
+    console.error("Store layout /departments error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Save / update a floor plan
 router.post("/", async (req, res) => {
   try {
