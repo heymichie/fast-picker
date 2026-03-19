@@ -24,6 +24,7 @@ interface ProductEntry {
   category: string;
   colour: string;
   description: string;
+  productCode: string;
 }
 
 interface Rail {
@@ -182,7 +183,7 @@ export default function SetupStoreLayout() {
   // Pending rect waiting for form input
   const [pendingRect, setPendingRect] = useState<PendingRect | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formProducts, setFormProducts] = useState<ProductEntry[]>([{ dept: "", category: "", colour: "", description: "" }]);
+  const [formProducts, setFormProducts] = useState<ProductEntry[]>([{ dept: "", category: "", colour: "", description: "", productCode: "" }]);
 
   const drawingRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
   const isAdmin = user?.isAdmin === true;
@@ -331,7 +332,7 @@ export default function SetupStoreLayout() {
       };
 
       setPendingRect(newPending);
-      setFormProducts([{ dept: "", category: "", colour: "", description: "" }]);
+      setFormProducts([{ dept: "", category: "", colour: "", description: "", productCode: "" }]);
       setShowForm(true);
     },
     [isDrawMode, rails, pendingRect, showForm],
@@ -342,7 +343,7 @@ export default function SetupStoreLayout() {
   }
 
   function addProduct() {
-    setFormProducts((prev) => [...prev, { dept: "", category: "", colour: "", description: "" }]);
+    setFormProducts((prev) => [...prev, { dept: "", category: "", colour: "", description: "", productCode: "" }]);
   }
 
   function removeProduct(i: number) {
@@ -372,7 +373,7 @@ export default function SetupStoreLayout() {
       category: formProducts.map((p) => p.category.trim()).join(" / "),
       colour: formProducts.map((p) => p.colour.trim()).join(" / "),
       description: formProducts.map((p) => p.description.trim()).filter(Boolean).join(" / "),
-      products: formProducts.map((p) => ({ dept: p.dept.trim(), category: p.category.trim(), colour: p.colour.trim(), description: p.description.trim() })),
+      products: formProducts.map((p) => ({ dept: p.dept.trim(), category: p.category.trim(), colour: p.colour.trim(), description: p.description.trim(), productCode: p.productCode.trim() })),
     };
 
     const updated = [...rails, newRail];
@@ -780,6 +781,17 @@ export default function SetupStoreLayout() {
                       value={p.description}
                       onChange={(e) => updateProduct(i, "description", e.target.value)}
                       placeholder="e.g. Formal long-sleeve shirts"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Product Code</label>
+                    <input
+                      type="text"
+                      value={p.productCode}
+                      onChange={(e) => updateProduct(i, "productCode", e.target.value)}
+                      placeholder="e.g. MSW-SHT-001"
                       style={inputStyle}
                     />
                   </div>
