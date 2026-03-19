@@ -13,6 +13,7 @@ import UserSetupSuccess from "@/pages/user-setup-success";
 import UserRights from "@/pages/user-rights";
 import ManageAccounts from "@/pages/manage-accounts";
 import PickOrders from "@/pages/pick-orders";
+import ManageStoreLayout from "@/pages/manage-store-layout";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/user-rights" component={UserRights} />
       <Route path="/manage-accounts" component={ManageAccounts} />
       <Route path="/pick-orders" component={PickOrders} />
+      <Route path="/manage-store-layout" component={ManageStoreLayout} />
       <Route component={NotFound} />
     </Switch>
   );

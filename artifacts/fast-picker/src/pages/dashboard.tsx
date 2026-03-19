@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGetAdminSetup } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle, ClipboardList } from "lucide-react";
+import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle, ClipboardList, Store } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
 
 function getStoredUser() {
@@ -50,6 +50,13 @@ const ALL_MENU_ITEMS = [
     requiredPerms: ["Setup branch layout", "View branch layout"],
   },
   {
+    label: "Manage Store Layout",
+    icon: Store,
+    description: "Update and maintain the active store floor plan and product placements",
+    path: "/manage-store-layout",
+    requiredPerms: ["Manage branch layout", "Setup branch layout"],
+  },
+  {
     label: "Pick Orders",
     icon: ClipboardList,
     description: "View and action assigned picking orders for your branch",
@@ -94,6 +101,7 @@ const DEFAULT_ROLE_PERMS: Record<string, string[]> = {
     "View Order Picker Performance",
     "Spool Reports",
     "Setup branch layout",
+    "Manage branch layout",
     "View branch layout",
     "Assign Account Rights",
   ],
