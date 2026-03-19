@@ -99,13 +99,12 @@ const tdBase: React.CSSProperties = {
   borderBottom: "1px solid #1a1a1a", verticalAlign: "middle",
 };
 
-const STATUSES = ["all", "received", "picking", "picked", "dispatched"];
+const STATUSES = ["all", "received", "picking", "picked"];
 
 export default function PickOrders() {
   const [, setLocation] = useLocation();
   const user = getStoredUser();
 
-  const isOrderPicker = user?.designation === "Order Picker";
   const isAdmin = user?.isAdmin === true;
   const canReassign = isAdmin
     || user?.designation === "Store Manager"
@@ -114,8 +113,6 @@ export default function PickOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [branches, setBranches] = useState<string[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState("ALL");
   const [advancing, setAdvancing] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
@@ -129,9 +126,6 @@ export default function PickOrders() {
   });
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
-  const canPickOrder = user?.designation === "Store Manager"
-    || user?.designation === "Store Supervisor";
-
   // If arriving from "Pick Order", pre-filter to "picking"
   useEffect(() => {
     if (focusOrder) setStatusFilter("picking");
@@ -144,35 +138,22 @@ export default function PickOrders() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [orders, focusOrder]);
 
-  // Branch setup for non-picker roles
-  useEffect(() => {
-    if (isOrderPicker) return;
-    if (isAdmin || user?.branchCode === "ALL") {
-      fetch("/api/orders/branches")
-        .then((r) => r.json())
-        .then((data: string[]) => setBranches(["ALL", ...data]))
-        .catch(() => setBranches(["ALL"]));
-    } else if (user?.branchCode) {
-      setBranches([user.branchCode]);
-      setSelectedBranch(user.branchCode);
-    }
-  }, []);
-
   const fetchOrders = useCallback(() => {
     const params = new URLSearchParams();
-    if (isOrderPicker && user?.username) {
-      params.set("pickerId", user.username);
-    } else {
-      if (selectedBranch && selectedBranch !== "ALL") params.set("branchCode", selectedBranch);
-    }
+    if (user?.username) params.set("pickerId", user.username);
     if (statusFilter !== "all") params.set("status", statusFilter);
 
     fetch(`/api/orders?${params}`)
       .then((r) => r.json())
-      .then((data: Order[]) => { setOrders(Array.isArray(data) ? data : []); setLastRefresh(new Date()); })
+      .then((data: Order[]) => {
+        // Exclude dispatched orders — pick orders shows only active work
+        const active = Array.isArray(data) ? data.filter((o) => o.status !== "dispatched") : [];
+        setOrders(active);
+        setLastRefresh(new Date());
+      })
       .catch(() => setOrders([]))
       .finally(() => setLoading(false));
-  }, [isOrderPicker, user?.username, selectedBranch, statusFilter]);
+  }, [user?.username, statusFilter]);
 
   useEffect(() => { setLoading(true); fetchOrders(); }, [fetchOrders]);
 
@@ -202,7 +183,6 @@ export default function PickOrders() {
     received: orders.filter((o) => o.status === "received").length,
     picking: orders.filter((o) => o.status === "picking").length,
     picked: orders.filter((o) => o.status === "picked").length,
-    dispatched: orders.filter((o) => o.status === "dispatched").length,
   };
 
   // Performance summary from current orders list
@@ -236,8 +216,8 @@ export default function PickOrders() {
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#fff", margin: 0, lineHeight: 1 }}>Pick Orders</h1>
           <p style={{ margin: "0.2rem 0 0", fontSize: "0.78rem", color: "#555" }}>
-            {isOrderPicker ? `Assigned to ${user?.forenames} ${user?.surname}` : "All orders"}{" "}
-            · Refreshed at {lastRefresh.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            Assigned to {user?.forenames} {user?.surname}
+            {" · "}Refreshed at {lastRefresh.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
@@ -278,69 +258,33 @@ export default function PickOrders() {
 
       <div style={{ flex: 1, padding: "1rem 1.5rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-        {/* Filters for non-pickers */}
-        {!isOrderPicker && (
-          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
-            {branches.length > 1 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <label style={{ fontSize: "0.8rem", color: "#666", fontWeight: 600, whiteSpace: "nowrap" }}>Branch</label>
-                <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}
-                  style={{ background: "#111", border: "1px solid #333", color: "#fff", borderRadius: 8, padding: "0.4rem 0.85rem", fontSize: "0.88rem", cursor: "pointer", outline: "none" }}>
-                  {branches.map((b) => <option key={b} value={b}>{b === "ALL" ? "All Branches" : b}</option>)}
-                </select>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-              {STATUSES.map((s) => {
-                const active = statusFilter === s;
-                const meta = STATUS_META[s];
-                return (
-                  <button key={s} type="button" onClick={() => setStatusFilter(s)}
-                    style={{
-                      padding: "0.3rem 0.85rem", borderRadius: 20, fontSize: "0.82rem",
-                      fontWeight: active ? 700 : 500, cursor: "pointer",
-                      background: active ? (meta?.bg ?? "rgba(255,255,255,0.1)") : "transparent",
-                      color: active ? (meta?.color ?? "#fff") : "#555",
-                      border: active ? `1.5px solid ${meta?.color ?? "#fff"}` : "1px solid #2a2a2a",
-                    }}>
-                    {s === "all" ? "All Statuses" : STATUS_META[s]?.label ?? s}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Status filter for Order Pickers */}
-        {isOrderPicker && (
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-            {STATUSES.map((s) => {
-              const active = statusFilter === s;
-              const meta = STATUS_META[s];
-              return (
-                <button key={s} type="button" onClick={() => setStatusFilter(s)}
-                  style={{
-                    padding: "0.3rem 0.85rem", borderRadius: 20, fontSize: "0.82rem",
-                    fontWeight: active ? 700 : 500, cursor: "pointer",
-                    background: active ? (meta?.bg ?? "rgba(255,255,255,0.1)") : "transparent",
-                    color: active ? (meta?.color ?? "#fff") : "#555",
-                    border: active ? `1.5px solid ${meta?.color ?? "#fff"}` : "1px solid #2a2a2a",
-                  }}>
-                  {s === "all" ? "All" : STATUS_META[s]?.label ?? s}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Status filter */}
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          {STATUSES.map((s) => {
+            const active = statusFilter === s;
+            const meta = STATUS_META[s];
+            return (
+              <button key={s} type="button" onClick={() => setStatusFilter(s)}
+                style={{
+                  padding: "0.3rem 0.85rem", borderRadius: 20, fontSize: "0.82rem",
+                  fontWeight: active ? 700 : 500, cursor: "pointer",
+                  background: active ? (meta?.bg ?? "rgba(255,255,255,0.1)") : "transparent",
+                  color: active ? (meta?.color ?? "#fff") : "#555",
+                  border: active ? `1.5px solid ${meta?.color ?? "#fff"}` : "1px solid #2a2a2a",
+                }}>
+                {s === "all" ? "All Active" : STATUS_META[s]?.label ?? s}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Stat cards */}
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           {[
-            { label: isOrderPicker ? "My Orders" : "Total", value: stats.total,      color: "#fff" },
-            { label: "Received",   value: stats.received,   color: "#88aaff" },
-            { label: "Picking",    value: stats.picking,    color: "#ffb83c" },
-            { label: "Picked",     value: stats.picked,     color: "#c07eff" },
-            { label: "Dispatched", value: stats.dispatched, color: "#50d278" },
+            { label: "Active Orders", value: stats.total,    color: "#fff" },
+            { label: "Received",      value: stats.received, color: "#88aaff" },
+            { label: "Picking",       value: stats.picking,  color: "#ffb83c" },
+            { label: "Picked",        value: stats.picked,   color: "#c07eff" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ background: "#111", border: "1px solid #222", borderRadius: 12, padding: "1.1rem 1.4rem", minWidth: 110, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
               <span style={{ fontSize: "2rem", fontWeight: 800, color, lineHeight: 1 }}>{value}</span>
@@ -351,9 +295,7 @@ export default function PickOrders() {
 
         {/* Orders table header */}
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>
-            {isOrderPicker ? "My Assigned Orders" : "All Orders"}
-          </h2>
+          <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>My Assigned Orders</h2>
           <span style={{ fontSize: "0.78rem", color: "#444" }}>{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
         </div>
 
@@ -361,24 +303,22 @@ export default function PickOrders() {
           <p style={{ color: "#444", fontSize: "0.9rem" }}>Loading orders…</p>
         ) : orders.length === 0 ? (
           <div style={{ padding: "3rem 0", textAlign: "center", color: "#444", fontSize: "0.9rem" }}>
-            {isOrderPicker ? "No orders assigned to you." : "No orders found for the selected filters."}
+            No active orders assigned to you.
           </div>
         ) : (
           <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1a1a1a" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: isOrderPicker ? 700 : 900 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: 720 }}>
               <thead>
                 <tr>
                   <th style={thStyle}>Order No</th>
-                  {!isOrderPicker && <th style={thStyle}>Branch</th>}
+                  <th style={thStyle}>Branch</th>
                   <th style={thStyle}>Items</th>
                   <th style={thStyle}>Status</th>
                   <th style={thStyle}>Received</th>
-                  {!isOrderPicker && <th style={thStyle}>Assigned Picker</th>}
                   <th style={thStyle}>Pick Started</th>
                   <th style={thStyle}>Pick Duration</th>
                   <th style={thStyle}>Comment</th>
-                  <th style={thStyle}>Dispatched</th>
-                  <th style={thStyle}>{(isOrderPicker || canPickOrder) ? "Action" : ""}</th>
+                  <th style={thStyle}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -389,8 +329,6 @@ export default function PickOrders() {
                   const next = NEXT_STATUS[o.status];
                   const isAdvancing = advancing.has(o.orderNumber);
                   const isFocused = o.orderNumber === focusOrder;
-                  const isSelfPicking = canPickOrder && o.assignedPickerId === user?.username
-                    && (o.status === "picking" || o.status === "picked");
                   return (
                     <tr
                       key={o.id}
@@ -418,48 +356,18 @@ export default function PickOrders() {
                           {o.orderNumber}
                         </button>
                       </td>
-                      {!isOrderPicker && (
-                        <td style={{ ...tdBase, fontFamily: "monospace", color: "#888", fontSize: "0.82rem" }}>{o.branchCode}</td>
-                      )}
+                      <td style={{ ...tdBase, fontFamily: "monospace", color: "#888", fontSize: "0.82rem" }}>{o.branchCode}</td>
                       <td style={{ ...tdBase, textAlign: "center" }}>{o.itemCount}</td>
                       <td style={tdBase}><StatusBadge status={o.status} /></td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap" }}>{fmt(o.receivedAt)}</td>
-                      {!isOrderPicker && (
-                        <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
-                          {o.assignedPickerName
-                            ? <span>{o.assignedPickerName}<br /><span style={{ fontSize: "0.74rem", color: "#555", fontFamily: "monospace" }}>{o.assignedPickerId}</span></span>
-                            : <span style={{ color: "#3a3a3a" }}>Unassigned</span>}
-                        </td>
-                      )}
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.pickingStartedAt ? "#ddd" : "#3a3a3a" }}>{fmt(o.pickingStartedAt)}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap", color: rating ? rating.color : (o.pickedAt ? "#c07eff" : "#3a3a3a"), fontWeight: 600 }}>{pickDur}</td>
                       <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
                         {rating ? <RatingBadge rating={rating} /> : <span style={{ color: "#333" }}>—</span>}
                       </td>
-                      <td style={{ ...tdBase, whiteSpace: "nowrap", color: o.dispatchedAt ? "#50d278" : "#3a3a3a" }}>{fmt(o.dispatchedAt)}</td>
                       <td style={tdBase}>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          {/* Picker action button */}
-                          {isOrderPicker && next && (
-                            <button
-                              type="button"
-                              disabled={isAdvancing}
-                              onClick={() => advanceStatus(o.orderNumber, next.next)}
-                              style={{
-                                background: "#1a4a1a", border: "1px solid #2a7a2a",
-                                color: "#50d278", padding: "0.3rem 0.75rem", borderRadius: 6,
-                                fontSize: "0.78rem", fontWeight: 700, cursor: isAdvancing ? "not-allowed" : "pointer",
-                                opacity: isAdvancing ? 0.6 : 1, whiteSpace: "nowrap",
-                              }}
-                            >
-                              {isAdvancing ? "…" : next.label}
-                            </button>
-                          )}
-                          {isOrderPicker && !next && (
-                            <span style={{ color: "#2a5a2a", fontSize: "0.78rem", fontWeight: 700 }}>✓ Done</span>
-                          )}
-                          {/* Self-picking action for manager/supervisor */}
-                          {isSelfPicking && next && (
+                          {next ? (
                             <button
                               type="button"
                               disabled={isAdvancing}
@@ -475,23 +383,8 @@ export default function PickOrders() {
                             >
                               {isAdvancing ? "…" : next.label}
                             </button>
-                          )}
-                          {isSelfPicking && !next && (
+                          ) : (
                             <span style={{ color: "#2a5a2a", fontSize: "0.78rem", fontWeight: 700 }}>✓ Done</span>
-                          )}
-                          {/* Reassign button for managers */}
-                          {canReassign && o.status === "received" && (
-                            <button
-                              type="button"
-                              onClick={() => setDetailOrder(o.orderNumber)}
-                              style={{
-                                background: "#1a1a2a", border: "1px solid #3a3a6a",
-                                color: "#88aaff", padding: "0.28rem 0.7rem", borderRadius: 6,
-                                fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                              }}
-                            >
-                              Reassign
-                            </button>
                           )}
                         </div>
                       </td>
@@ -507,24 +400,21 @@ export default function PickOrders() {
         {perfRows.length > 0 && (
           <div>
             <h2 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", fontWeight: 700, color: "#ccc" }}>
-              {isOrderPicker ? "My Performance Summary" : "Picker Performance Summary"}
+              My Performance Summary
             </h2>
             <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1a1a1a" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", background: "#0d0d0d", minWidth: 480 }}>
                 <thead>
                   <tr>
-                    {(isOrderPicker ? ["", "Orders Picked", "Excellent", "Good", "Could Improve", "Poor"] : ["Picker", "Orders Picked", "Excellent", "Good", "Could Improve", "Poor"]).map((h) => (
-                      <th key={h} style={{ ...thStyle, textAlign: h === "Picker" || h === "" ? "left" : "center" }}>{h}</th>
+                    {["", "Orders Picked", "Excellent", "Good", "Could Improve", "Poor"].map((h) => (
+                      <th key={h} style={{ ...thStyle, textAlign: h === "" ? "left" : "center" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {perfRows.map(([pickerId, row], i) => (
                     <tr key={pickerId} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
-                      <td style={{ ...tdBase, fontWeight: 600, color: "#fff" }}>
-                        {isOrderPicker ? "You" : row.pickerName}
-                        {!isOrderPicker && <span style={{ marginLeft: 8, fontSize: "0.73rem", color: "#444", fontFamily: "monospace" }}>{pickerId}</span>}
-                      </td>
+                      <td style={{ ...tdBase, fontWeight: 600, color: "#fff" }}>You</td>
                       <td style={{ ...tdBase, textAlign: "center", color: "#888" }}>{row.total}</td>
                       <td style={{ ...tdBase, textAlign: "center" }}>
                         {row.excellent > 0 ? <span style={{ color: "#50d278", fontWeight: 700 }}>{row.excellent}</span> : <span style={{ color: "#2a2a2a" }}>—</span>}
