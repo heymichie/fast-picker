@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGetAdminSetup } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle, ClipboardList, Store } from "lucide-react";
+import { Loader2, UserPlus, Users, BarChart2, LayoutGrid, ShieldCheck, LogOut, UserCircle, ClipboardList, Store, Eye } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
 
 function getStoredUser() {
@@ -27,6 +27,7 @@ const ALL_MENU_ITEMS = [
     description: "Add new pickers, supervisors or admin users to the system",
     path: "/create-account",
     requiredPerms: ["Create New Accounts", "Create Order picker accounts"],
+    hideForAdmin: false,
   },
   {
     label: "Manage Accounts",
@@ -34,6 +35,15 @@ const ALL_MENU_ITEMS = [
     description: "View, edit and deactivate existing user accounts",
     path: "/manage-accounts",
     requiredPerms: ["Manage Accounts", "Manage Order Picker Accounts"],
+    hideForAdmin: false,
+  },
+  {
+    label: "View Orders",
+    icon: Eye,
+    description: "View and monitor all active and completed picking orders",
+    path: "/pick-orders",
+    requiredPerms: ["View Orders", "View Order Picker Performance"],
+    hideForAdmin: false,
   },
   {
     label: "Reports",
@@ -41,6 +51,7 @@ const ALL_MENU_ITEMS = [
     description: "View picking performance, order history and analytics",
     path: "/reports",
     requiredPerms: ["View Orders", "View Order Picker Performance", "Spool Reports"],
+    hideForAdmin: false,
   },
   {
     label: "Setup Store Layout",
@@ -48,6 +59,7 @@ const ALL_MENU_ITEMS = [
     description: "Configure aisles, sections and product locations in store",
     path: "/store-layout",
     requiredPerms: ["Setup branch layout", "View branch layout"],
+    hideForAdmin: false,
   },
   {
     label: "Manage Store Layout",
@@ -55,6 +67,7 @@ const ALL_MENU_ITEMS = [
     description: "Update and maintain the active store floor plan and product placements",
     path: "/manage-store-layout",
     requiredPerms: ["Manage branch layout", "Setup branch layout"],
+    hideForAdmin: false,
   },
   {
     label: "Pick Orders",
@@ -62,6 +75,7 @@ const ALL_MENU_ITEMS = [
     description: "View and action assigned picking orders for your branch",
     path: "/pick-orders",
     requiredPerms: ["Pick Orders"],
+    hideForAdmin: true,
   },
   {
     label: "User Rights",
@@ -69,6 +83,7 @@ const ALL_MENU_ITEMS = [
     description: "Manage role permissions and access controls for all users",
     path: "/user-rights",
     requiredPerms: ["Assign Account Rights"],
+    hideForAdmin: false,
   },
 ];
 
@@ -137,7 +152,7 @@ export default function Dashboard() {
   // Determine which menu items to show
   const visibleItems = ALL_MENU_ITEMS.filter((item) => {
     if (!user) return true; // not logged in, show all
-    if (user.isAdmin) return true; // system admins always see everything
+    if (user.isAdmin) return !item.hideForAdmin; // admins see all except items flagged as non-admin
     if (!userRights) return true; // rights not loaded yet, show all
     // Use DB-configured rights if set, otherwise fall back to built-in defaults
     const dbPerms: string[] | undefined = userRights[user.designation];
