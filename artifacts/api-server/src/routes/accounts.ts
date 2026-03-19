@@ -156,6 +156,23 @@ router.get("/all", async (_req, res) => {
   }
 });
 
+router.post("/update-department", async (req, res) => {
+  try {
+    const { username, department } = req.body;
+    if (!username) {
+      res.status(400).json({ error: "Username is required" });
+      return;
+    }
+    await db
+      .update(usersTable)
+      .set({ department: department || null })
+      .where(eq(usersTable.username, username));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/set-password", async (req, res) => {
   try {
     const { username, newPassword } = req.body;

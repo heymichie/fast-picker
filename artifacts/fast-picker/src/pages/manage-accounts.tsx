@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
@@ -45,8 +45,40 @@ export default function ManageAccounts() {
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [savingDept, setSavingDept] = useState<Set<string>>(new Set());
+  const [savedDept, setSavedDept] = useState<Set<string>>(new Set());
+  const savedTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const isAdministrator = !!(user?.isAdmin || user?.designation === "Administrator");
+
+  useEffect(() => {
+    fetch("/api/store-layout/departments")
+      .then((r) => r.json())
+      .then((data: string[]) => setDepartments(Array.isArray(data) ? data : []))
+      .catch(() => setDepartments([]));
+  }, []);
+
+  async function handleDeptChange(username: string, dept: string) {
+    setAccounts((prev) => prev.map((a) => a.username === username ? { ...a, department: dept || null } : a));
+    setSavingDept((prev) => new Set(prev).add(username));
+    try {
+      await fetch("/api/accounts/update-department", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, department: dept || null }),
+      });
+      setSavedDept((prev) => new Set(prev).add(username));
+      if (savedTimers.current[username]) clearTimeout(savedTimers.current[username]);
+      savedTimers.current[username] = setTimeout(() => {
+        setSavedDept((prev) => { const next = new Set(prev); next.delete(username); return next; });
+      }, 1800);
+    } catch {
+      // silently ignore — value already optimistically updated in UI
+    } finally {
+      setSavingDept((prev) => { const next = new Set(prev); next.delete(username); return next; });
+    }
+  }
 
   useEffect(() => {
     fetch("/api/accounts/all")
@@ -185,7 +217,39 @@ export default function ManageAccounts() {
                     <td style={cellStyle(idx)}>{row.username}</td>
                     <td style={cellStyle(idx)}>{row.fullName}</td>
                     <td style={cellStyle(idx)}>{row.employeeNumber ?? "—"}</td>
-                    <td style={cellStyle(idx)}>{row.department ?? "—"}</td>
+                    <td style={{ ...cellStyle(idx), padding: "6px 8px" }}>
+                      {row.accountType === "admin" ? (
+                        <span style={{ color: "#888", paddingLeft: 4 }}>—</span>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <select
+                            value={row.department ?? ""}
+                            onChange={(e) => handleDeptChange(row.username, e.target.value)}
+                            disabled={savingDept.has(row.username)}
+                            style={{
+                              flex: 1, background: "#fff", border: "1px solid #bbb",
+                              borderRadius: 4, padding: "3px 6px", fontSize: "0.85rem",
+                              color: row.department ? "#111" : "#888", cursor: "pointer",
+                              outline: "none", maxWidth: "100%",
+                            }}
+                          >
+                            <option value="">— None —</option>
+                            {departments.map((d) => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                            {row.department && !departments.includes(row.department) && (
+                              <option value={row.department}>{row.department}</option>
+                            )}
+                          </select>
+                          {savingDept.has(row.username) && (
+                            <Loader2 style={{ width: 13, height: 13, color: "#888", animation: "spin 1s linear infinite", flexShrink: 0 }} />
+                          )}
+                          {savedDept.has(row.username) && (
+                            <span style={{ fontSize: "0.72rem", color: "#2a9a2a", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>✓ Saved</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td style={cellStyle(idx)}>{row.branchCode}</td>
                     <td style={cellStyle(idx)}>{row.rights}</td>
                     <td style={{ ...cellStyle(idx), color: row.isActive ? "#111" : "#cc0000", fontWeight: row.isActive ? 400 : 600 }}>
