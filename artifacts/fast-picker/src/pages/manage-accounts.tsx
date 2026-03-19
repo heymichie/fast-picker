@@ -102,7 +102,7 @@ export default function ManageAccounts() {
           />
         </button>
         <h1 style={{ fontSize: "2.2rem", fontWeight: 700, color: "#fff", margin: 0, flex: 1, lineHeight: 1 }}>
-          Account: {user ? `${user.forenames} ${user.surname}` : "(username)"}
+          Account: {user ? `${user.forenames} ${user.surname}` : "User"}
         </h1>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
           <button

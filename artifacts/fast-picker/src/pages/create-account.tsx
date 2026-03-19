@@ -153,7 +153,7 @@ export default function CreateAccount() {
             lineHeight: 1,
           }}
         >
-          Account: ({username || "username"})
+          Account: {currentUser ? `${currentUser.forenames} ${currentUser.surname}` : "User"}
         </h1>
 
         {/* Right: logout + clock */}
