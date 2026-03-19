@@ -13,6 +13,7 @@ import UserSetupSuccess from "@/pages/user-setup-success";
 import UserRights from "@/pages/user-rights";
 import ManageAccounts from "@/pages/manage-accounts";
 import PickOrders from "@/pages/pick-orders";
+import ViewOrders from "@/pages/view-orders";
 import ManageStoreLayout from "@/pages/manage-store-layout";
 import SetupStoreLayout from "@/pages/setup-store-layout";
 import Reports from "@/pages/reports";
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/user-rights" component={UserRights} />
       <Route path="/manage-accounts" component={ManageAccounts} />
       <Route path="/pick-orders" component={PickOrders} />
+      <Route path="/view-orders" component={ViewOrders} />
       <Route path="/manage-store-layout" component={ManageStoreLayout} />
       <Route path="/store-layout" component={SetupStoreLayout} />
       <Route path="/reports" component={Reports} />

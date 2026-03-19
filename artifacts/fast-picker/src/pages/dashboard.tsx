@@ -41,7 +41,7 @@ const ALL_MENU_ITEMS = [
     label: "View Orders",
     icon: Eye,
     description: "View and monitor all active and completed picking orders",
-    path: "/pick-orders",
+    path: "/view-orders",
     requiredPerms: ["View Orders", "View Order Picker Performance"],
     hideForAdmin: false,
   },
