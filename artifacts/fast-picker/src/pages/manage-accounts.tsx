@@ -280,7 +280,6 @@ export default function ManageAccounts() {
                               {extraOpt && <option value={extraOpt}>{extraOpt}</option>}
                             </select>
                             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                              <ActionBtn label="Apply" variant="apply" onClick={() => applySelection(row.username)} disabled={isSaving} />
                               <ActionBtn label="Save" variant="save" onClick={() => commitSave(row.username)} disabled={isSaving} />
                               <ActionBtn label="Cancel" variant="cancel" onClick={() => cancelEdit(row.username)} disabled={isSaving} />
                               {isSaving && <Loader2 style={{ width: 14, height: 14, color: "#888", animation: "spin 1s linear infinite", alignSelf: "center" }} />}
