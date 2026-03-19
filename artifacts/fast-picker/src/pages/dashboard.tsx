@@ -24,7 +24,7 @@ const ALL_MENU_ITEMS = [
   {
     label: "Create New Account",
     icon: UserPlus,
-    description: "Add new pickers, supervisors or admin users to the system",
+    description: "Add new pickers, supervisors or merchandiser users to the system",
     path: "/create-account",
     requiredPerms: ["Create New Accounts", "Create Order picker accounts"],
     hideForAdmin: false,
