@@ -240,6 +240,106 @@ export default function ManageStoreLayout() {
 
   const hasFloorContent = !loading && (floorPlanSrc || rails.length > 0);
 
+  // ── Print helpers ─────────────────────────────────────────────────
+  function printFloorPlan() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const title = `Floor Plan — ${selectedBranch} / ${selectedFloor}`;
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;background:#fff;font-family:Arial,sans-serif;}
+      h2{font-size:15px;color:#333;margin:0 0 10px;}
+      p{font-size:11px;color:#888;margin:0 0 12px;}
+      img{max-width:100%;border:1px solid #ddd;border-radius:6px;}
+      @media print{@page{margin:1.5cm;}body{padding:0;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      <img src="${dataUrl}" />
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+  }
+
+  function buildRailTableHtml(extraStyle = "") {
+    const rowsHtml = rails.map((rail) => {
+      const products = rail.products?.length
+        ? rail.products
+        : [{ productCode: "", dept: rail.department, category: rail.category, colour: rail.colour, description: rail.description }];
+      return products.map((p, pi) => `<tr>
+        ${pi === 0 ? `<td rowspan="${products.length}" style="vertical-align:middle;font-weight:700;font-family:monospace;font-size:11px;color:#1a2a3a;">${rail.id}</td>` : ""}
+        <td style="font-family:monospace;font-size:11px;">${p.productCode || "—"}</td>
+        <td>${p.dept || "—"}</td>
+        <td>${p.category || "—"}</td>
+        <td>${p.colour || "—"}</td>
+        <td>${p.description || "—"}</td>
+      </tr>`).join("");
+    }).join("");
+    return `<table style="width:100%;border-collapse:collapse;font-size:12px;${extraStyle}">
+      <thead><tr>
+        <th style="text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">Rail ID</th>
+        <th style="text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">Product Code</th>
+        <th style="text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">Department</th>
+        <th style="text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">Category</th>
+        <th style="text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">Colour</th>
+        <th style="text-align:left;padding:7px 10px;background:#4a9eda;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">Description</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  }
+
+  function printRailInfo() {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const title = `Rail Information — ${selectedBranch} / ${selectedFloor}`;
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#fff;color:#222;}
+      h2{font-size:15px;color:#333;margin:0 0 6px;}
+      p{font-size:11px;color:#888;margin:0 0 14px;}
+      td,th{padding:7px 10px;border-bottom:1px solid #e8e8e8;vertical-align:top;}
+      tr:nth-child(even) td{background:#f6faff;}
+      @media print{@page{margin:1.5cm;size:landscape;}body{padding:0;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>${rails.length} rail${rails.length !== 1 ? "s" : ""} · Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      ${buildRailTableHtml()}
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+  }
+
+  function printBoth() {
+    const canvas = canvasRef.current;
+    const dataUrl = canvas ? canvas.toDataURL("image/png") : null;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const title = `Store Layout — ${selectedBranch} / ${selectedFloor}`;
+    const imgSection = dataUrl
+      ? `<h3 style="font-size:13px;color:#333;margin:0 0 8px;">Floor Plan</h3><img src="${dataUrl}" style="max-width:100%;border:1px solid #ddd;border-radius:6px;" />`
+      : "";
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#fff;color:#222;}
+      h2{font-size:15px;color:#333;margin:0 0 6px;}
+      h3{font-size:13px;color:#333;margin:22px 0 8px;}
+      p{font-size:11px;color:#888;margin:0 0 14px;}
+      td,th{padding:7px 10px;border-bottom:1px solid #e8e8e8;vertical-align:top;}
+      tr:nth-child(even) td{background:#f6faff;}
+      @media print{@page{margin:1.5cm;}body{padding:0;}.page-break{page-break-before:always;}}
+    </style></head><body>
+      <h2>${title}</h2>
+      <p>Printed ${new Date().toLocaleDateString("en-ZA", { day:"2-digit", month:"long", year:"numeric" })}</p>
+      ${imgSection}
+      ${rails.length > 0 ? `<div class="page-break"><h3>Rail Information</h3><p>${rails.length} rail${rails.length !== 1 ? "s" : ""}</p>${buildRailTableHtml()}</div>` : ""}
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", color: "#fff" }}>
 
@@ -298,9 +398,24 @@ export default function ManageStoreLayout() {
 
         {selectedBranch && selectedFloor && !loading && (
           <>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#fff" }}>{selectedBranch} — {selectedFloor}</h2>
-              <span style={{ fontSize: "0.82rem", color: "#555" }}>{rails.length} rail{rails.length !== 1 ? "s" : ""}</span>
+              <span style={{ fontSize: "0.82rem", color: "#555", flex: 1 }}>{rails.length} rail{rails.length !== 1 ? "s" : ""}</span>
+              {hasFloorContent && (
+                <button
+                  type="button"
+                  onClick={printBoth}
+                  title="Print floor plan and rail information"
+                  style={{
+                    display: "flex", alignItems: "center", gap: "0.4rem",
+                    background: "#4a9eda", border: "none", color: "#fff",
+                    padding: "0.42rem 1rem", borderRadius: 8,
+                    fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  🖨 Print Both
+                </button>
+              )}
             </div>
 
             {/* ── Floor Plan section ──────────────────────────────── */}
@@ -308,7 +423,22 @@ export default function ManageStoreLayout() {
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 <div style={sectionHeaderStyle} onClick={() => setPlanOpen((v) => !v)}>
                   <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ccc" }}>Floor Plan</span>
-                  <span style={{ fontSize: "0.8rem", color: "#555" }}>{planOpen ? "▲ Collapse" : "▼ Expand"}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    {floorPlanSrc && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); printFloorPlan(); }}
+                        style={{
+                          background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda",
+                          color: "#4a9eda", padding: "0.22rem 0.65rem", borderRadius: 6,
+                          fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                        }}
+                      >
+                        🖨 Print
+                      </button>
+                    )}
+                    <span style={{ fontSize: "0.8rem", color: "#555" }}>{planOpen ? "▲ Collapse" : "▼ Expand"}</span>
+                  </div>
                 </div>
                 {planOpen && (
                   <div ref={containerRef} style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "#111", borderRadius: 10, border: "1px solid #2a2a2a", overflow: "hidden" }}>
@@ -328,7 +458,20 @@ export default function ManageStoreLayout() {
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 <div style={sectionHeaderStyle} onClick={() => setTableOpen((v) => !v)}>
                   <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ccc" }}>Rail Information</span>
-                  <span style={{ fontSize: "0.8rem", color: "#555" }}>{tableOpen ? "▲ Collapse" : "▼ Expand"}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); printRailInfo(); }}
+                      style={{
+                        background: "rgba(74,158,218,0.15)", border: "1px solid #4a9eda",
+                        color: "#4a9eda", padding: "0.22rem 0.65rem", borderRadius: 6,
+                        fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >
+                      🖨 Print
+                    </button>
+                    <span style={{ fontSize: "0.8rem", color: "#555" }}>{tableOpen ? "▲ Collapse" : "▼ Expand"}</span>
+                  </div>
                 </div>
                 {tableOpen && (
                   <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #222" }}>
