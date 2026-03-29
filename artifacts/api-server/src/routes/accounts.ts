@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, usersTable, organisationsTable, administratorsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 
 const router: IRouter = Router();
@@ -101,7 +101,7 @@ router.post("/", async (req, res) => {
 
 router.get("/", async (_req, res) => {
   try {
-    const users = await db.select().from(usersTable);
+    const users = await db.select().from(usersTable).where(eq(usersTable.isArchived, false));
     res.json(users);
   } catch {
     res.status(500).json({ error: "Internal server error" });
@@ -110,7 +110,7 @@ router.get("/", async (_req, res) => {
 
 router.get("/branches", async (_req, res) => {
   try {
-    const users = await db.select({ branchCode: usersTable.branchCode }).from(usersTable);
+    const users = await db.select({ branchCode: usersTable.branchCode }).from(usersTable).where(eq(usersTable.isArchived, false));
     const codes = [...new Set(users.map((u) => u.branchCode).filter((c) => c && c !== "ALL"))].sort();
     res.json(codes);
   } catch {
@@ -120,7 +120,7 @@ router.get("/branches", async (_req, res) => {
 
 router.get("/all", async (_req, res) => {
   try {
-    const users = await db.select().from(usersTable);
+    const users = await db.select().from(usersTable).where(eq(usersTable.isArchived, false));
     const admins = await db.select().from(administratorsTable);
 
     const combined = [
@@ -180,7 +180,7 @@ router.get("/:username", async (req, res) => {
     const [user] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.username, username))
+      .where(and(eq(usersTable.username, username), eq(usersTable.isArchived, false)))
       .limit(1);
     if (!user) {
       res.status(404).json({ error: "User not found" });
@@ -240,6 +240,29 @@ router.put("/:username", async (req, res) => {
       .where(eq(usersTable.username, username));
 
     res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE — archive a user account (soft-delete, sets isArchived = true)
+router.delete("/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+    const [user] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(eq(usersTable.username, username), eq(usersTable.isArchived, false)))
+      .limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    await db
+      .update(usersTable)
+      .set({ isArchived: true, isActive: false })
+      .where(eq(usersTable.username, username));
+    res.json({ ok: true, message: "Account archived successfully" });
   } catch {
     res.status(500).json({ error: "Internal server error" });
   }

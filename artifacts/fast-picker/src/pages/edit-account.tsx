@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, Archive } from "lucide-react";
 import { LiveClock } from "@/components/LiveClock";
 
 function getStoredUser() {
@@ -62,6 +62,11 @@ export default function EditAccount() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Archive state
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   // Load departments
   useEffect(() => {
@@ -157,6 +162,26 @@ export default function EditAccount() {
       setSaveError("Unable to connect. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleArchive() {
+    setArchiveError(null);
+    setIsArchiving(true);
+    try {
+      const res = await fetch(`/api/accounts/${encodeURIComponent(targetUsername)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        setArchiveError(body.error ?? "Failed to archive account.");
+        return;
+      }
+      setLocation("/manage-accounts");
+    } catch {
+      setArchiveError("Unable to connect. Please try again.");
+    } finally {
+      setIsArchiving(false);
     }
   }
 
@@ -414,6 +439,62 @@ export default function EditAccount() {
                 Cancel
               </button>
 
+            </div>
+
+            {/* ── Archive section ────────────────────────────────── */}
+            <div style={{ marginTop: 40, maxWidth: 820, borderTop: "1px solid #333", paddingTop: 24 }}>
+              {!showArchiveConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => { setShowArchiveConfirm(true); setArchiveError(null); }}
+                  disabled={isSaving || isArchiving}
+                  style={{
+                    ...btnBase,
+                    background: "transparent",
+                    color: "#cc3333",
+                    borderColor: "#cc3333",
+                    opacity: (isSaving || isArchiving) ? 0.5 : 1,
+                  }}>
+                  <Archive style={{ width: 15, height: 15 }} />
+                  Archive Account
+                </button>
+              ) : (
+                <div style={{
+                  background: "rgba(180,30,30,0.08)",
+                  border: "1px solid #993333",
+                  borderRadius: 8,
+                  padding: "1rem 1.25rem",
+                }}>
+                  <p style={{ margin: "0 0 6px", fontWeight: 700, color: "#e06060", fontSize: "0.95rem" }}>
+                    Archive this account?
+                  </p>
+                  <p style={{ margin: "0 0 14px", color: "#ccc", fontSize: "0.85rem" }}>
+                    <strong>{targetUsername}</strong> will be removed from all account lists and will no longer be able to log in.
+                    This action can be undone by an administrator.
+                  </p>
+                  {archiveError && (
+                    <p style={{ color: "#f66", fontSize: "0.82rem", marginBottom: 10 }}>{archiveError}</p>
+                  )}
+                  <div style={{ display: "flex", gap: "0.75rem" }}>
+                    <button
+                      type="button"
+                      onClick={handleArchive}
+                      disabled={isArchiving}
+                      style={{ ...btnBase, background: "#cc3333", color: "#fff", borderColor: "#cc3333", opacity: isArchiving ? 0.6 : 1 }}>
+                      {isArchiving
+                        ? <><Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} /> Archiving…</>
+                        : "Yes, Archive"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowArchiveConfirm(false); setArchiveError(null); }}
+                      disabled={isArchiving}
+                      style={{ ...btnBase, background: "transparent", color: "#aaa", borderColor: "#666" }}>
+                      No, Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

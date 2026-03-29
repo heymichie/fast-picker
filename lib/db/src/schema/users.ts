@@ -20,6 +20,7 @@ export const usersTable = pgTable("users", {
   createdBy: text("created_by"),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  isArchived: boolean("is_archived").default(false).notNull(),
 });
 
 export type User = typeof usersTable.$inferSelect;
