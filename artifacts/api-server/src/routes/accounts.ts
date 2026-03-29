@@ -173,6 +173,78 @@ router.post("/update-department", async (req, res) => {
   }
 });
 
+// GET single user details for edit form
+router.get("/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.username, username))
+      .limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({
+      username: user.username,
+      forenames: user.forenames,
+      surname: user.surname,
+      employeeNumber: user.employeeNumber ?? null,
+      email: user.email ?? null,
+      department: user.department ?? null,
+      rights: user.rights,
+      branchCode: user.branchCode,
+      isActive: user.isActive,
+    });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT update user details
+router.put("/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { forenames, surname, employeeNumber, email, department, rights, branchCode, isActive } = req.body;
+
+    if (!forenames || !surname || !rights || !branchCode) {
+      res.status(400).json({ error: "Missing required fields" });
+      return;
+    }
+
+    const [user] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.username, username))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const isAdminRole = rights === "Administrator";
+    await db
+      .update(usersTable)
+      .set({
+        forenames: forenames.trim(),
+        surname: surname.trim(),
+        employeeNumber: employeeNumber?.trim() || null,
+        email: email?.trim() || null,
+        department: department?.trim() || null,
+        rights,
+        branchCode: isAdminRole ? "ALL" : branchCode,
+        isActive: isActive !== undefined ? isActive : true,
+      })
+      .where(eq(usersTable.username, username));
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/set-password", async (req, res) => {
   try {
     const { username, newPassword } = req.body;

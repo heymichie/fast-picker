@@ -328,7 +328,24 @@ export default function ManageAccounts() {
 
                   return (
                     <tr key={row.username}>
-                      <td style={cellStyle(idx)}>{row.username}</td>
+                      <td style={cellStyle(idx)}>
+                        {row.accountType === "user" ? (
+                          <button
+                            type="button"
+                            onClick={() => setLocation(`/edit-account/${encodeURIComponent(row.username)}`)}
+                            style={{
+                              background: "none", border: "none", padding: 0,
+                              color: "#2a6ad4", cursor: "pointer",
+                              fontWeight: 600, fontSize: "inherit",
+                              textDecoration: "underline",
+                              textUnderlineOffset: 3,
+                            }}>
+                            {row.username}
+                          </button>
+                        ) : (
+                          row.username
+                        )}
+                      </td>
                       <td style={cellStyle(idx)}>{row.fullName}</td>
                       <td style={cellStyle(idx)}>{row.employeeNumber ?? "—"}</td>
 

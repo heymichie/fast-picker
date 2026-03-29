@@ -8,6 +8,7 @@ import SetupSuccess from "@/pages/setup-success";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import CreateAccount from "@/pages/create-account";
+import EditAccount from "@/pages/edit-account";
 import NewSignIn from "@/pages/new-signin";
 import UserSetupSuccess from "@/pages/user-setup-success";
 import UserRights from "@/pages/user-rights";
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/create-account" component={CreateAccount} />
+      <Route path="/edit-account/:username" component={EditAccount} />
       <Route path="/new-signin" component={NewSignIn} />
       <Route path="/user-setup-success" component={UserSetupSuccess} />
       <Route path="/user-rights" component={UserRights} />
